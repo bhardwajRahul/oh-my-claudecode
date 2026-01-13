@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-beta.2] - 2026-01-13
+
+### 🧪 New: QA-Tester Agent for Interactive Testing
+
+**Added tmux-based interactive testing capabilities for CLI/service verification.**
+
+### Added
+- **QA-Tester Agent** (`src/agents/qa-tester.ts`)
+  - Interactive CLI testing using tmux sessions
+  - Prerequisite checking (tmux availability, server connections)
+  - Structured test execution workflow
+  - Oracle → QA-Tester diagnostic loop pattern
+
+- **Smart Gating for qa-tester** in ultrawork/skills
+  - Prefer standard test suites over qa-tester when available
+  - Use qa-tester only when interactive testing is truly needed
+  - Token-efficient verification decisions
+
+- **Adaptive Routing for qa-tester**
+  - Simple verification → Haiku
+  - Interactive testing → Sonnet
+  - Complex integration → Opus
+
+### Changed
+- Updated ultrawork skill with verification protocol and qa-tester gating
+- Updated ralph-loop and orchestrator with qa-tester integration
+- Updated sisyphus command with Agent Combinations section
+
+---
+
 ## [2.0.0-beta.1] - 2026-01-13
 
 ### 🚀 Revolutionary: Intelligent Model Routing

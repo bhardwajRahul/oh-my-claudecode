@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
 **Project:** Oh-My-ClaudeCode-Sisyphus
-**Version:** 2.0.0-beta.1
+**Version:** 2.0.0-beta.2
 **Purpose:** Multi-agent orchestration system for Claude Code CLI
 **Inspired by:** oh-my-opencode
 
