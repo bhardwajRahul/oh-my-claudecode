@@ -23,6 +23,8 @@ export interface UltraworkState {
   reinforcement_count: number;
   /** Last time the mode was checked/reinforced */
   last_checked_at: string;
+  /** Whether this ultrawork session is linked to a ralph-loop session */
+  linked_to_ralph?: boolean;
 }
 
 const _DEFAULT_STATE: UltraworkState = {
@@ -126,7 +128,8 @@ export function writeUltraworkState(state: UltraworkState, directory?: string): 
 export function activateUltrawork(
   prompt: string,
   sessionId?: string,
-  directory?: string
+  directory?: string,
+  linkedToRalph?: boolean
 ): boolean {
   const state: UltraworkState = {
     active: true,
@@ -134,7 +137,8 @@ export function activateUltrawork(
     original_prompt: prompt,
     session_id: sessionId,
     reinforcement_count: 0,
-    last_checked_at: new Date().toISOString()
+    last_checked_at: new Date().toISOString(),
+    linked_to_ralph: linkedToRalph
   };
 
   return writeUltraworkState(state, directory);

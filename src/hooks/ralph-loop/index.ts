@@ -27,6 +27,11 @@ import {
   initProgress,
   addPattern
 } from '../ralph-progress/index.js';
+import {
+  UltraworkState,
+  readUltraworkState as readUltraworkStateFromModule,
+  writeUltraworkState as writeUltraworkStateFromModule
+} from '../ultrawork-state/index.js';
 
 // Forward declaration to avoid circular import - check ultraqa state file directly
 export function isUltraQAActive(directory: string): boolean {
@@ -67,18 +72,6 @@ export interface RalphLoopState {
   linked_ultrawork?: boolean;
 }
 
-export interface UltraworkState {
-  /** Whether ultrawork is currently active */
-  active: boolean;
-  /** Reinforcement count for persistence */
-  reinforcement_count: number;
-  /** Original prompt/task */
-  original_prompt: string;
-  /** When started */
-  started_at: string;
-  /** Whether linked to ralph (auto-activated) */
-  linked_to_ralph?: boolean;
-}
 
 export interface RalphLoopOptions {
   /** Maximum iterations (default: 10) */
@@ -166,58 +159,20 @@ export function clearRalphState(directory: string): boolean {
   }
 }
 
-/**
- * Get ultrawork state file path
- */
-function getUltraworkStateFilePath(directory: string): string {
-  const omcDir = join(directory, '.omc');
-  return join(omcDir, 'ultrawork-state.json');
-}
-
-/**
- * Write ultrawork state to disk
- */
-export function writeUltraworkState(directory: string, state: UltraworkState): boolean {
-  try {
-    ensureStateDir(directory);
-    const stateFile = getUltraworkStateFilePath(directory);
-    writeFileSync(stateFile, JSON.stringify(state, null, 2));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Read ultrawork state from disk
- */
-export function readUltraworkState(directory: string): UltraworkState | null {
-  const stateFile = getUltraworkStateFilePath(directory);
-
-  if (!existsSync(stateFile)) {
-    return null;
-  }
-
-  try {
-    const content = readFileSync(stateFile, 'utf-8');
-    return JSON.parse(content);
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Clear ultrawork state (only if linked to ralph)
  */
 export function clearLinkedUltraworkState(directory: string): boolean {
-  const state = readUltraworkState(directory);
+  const state = readUltraworkStateFromModule(directory);
 
   // Only clear if it was linked to ralph (auto-activated)
   if (!state || !state.linked_to_ralph) {
     return true;
   }
 
-  const stateFile = getUltraworkStateFilePath(directory);
+  const omcDir = join(directory, '.omc');
+  const stateFile = join(omcDir, 'ultrawork-state.json');
   try {
     unlinkSync(stateFile);
     return true;
@@ -322,9 +277,10 @@ export function createRalphLoopHook(directory: string): RalphLoopHook {
         reinforcement_count: 0,
         original_prompt: prompt,
         started_at: now,
+        last_checked_at: now,
         linked_to_ralph: true
       };
-      writeUltraworkState(directory, ultraworkState);
+      writeUltraworkStateFromModule(ultraworkState, directory);
     }
 
     return ralphSuccess;
