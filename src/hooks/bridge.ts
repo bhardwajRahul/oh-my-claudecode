@@ -41,6 +41,30 @@ import {
   RALPH_MESSAGE
 } from '../installer/hooks.js';
 
+// New async hook imports
+import {
+  processSubagentStart,
+  processSubagentStop,
+  type SubagentStartInput,
+  type SubagentStopInput
+} from './subagent-tracker/index.js';
+import {
+  processPreCompact,
+  type PreCompactInput
+} from './pre-compact/index.js';
+import {
+  processSetup,
+  type SetupInput
+} from './setup/index.js';
+import {
+  handlePermissionRequest,
+  type PermissionRequestInput
+} from './permission-handler/index.js';
+import {
+  handleSessionEnd,
+  type SessionEndInput
+} from './session-end/index.js';
+
 /**
  * Input format from Claude Code hooks (via stdin)
  */
@@ -91,9 +115,16 @@ export type HookType =
   | 'ralph'
   | 'persistent-mode'
   | 'session-start'
+  | 'session-end'          // NEW: Cleanup and metrics on session end
   | 'pre-tool-use'
   | 'post-tool-use'
-  | 'autopilot';
+  | 'autopilot'
+  | 'subagent-start'       // NEW: Track agent spawns
+  | 'subagent-stop'        // NEW: Verify agent completion
+  | 'pre-compact'          // NEW: Save state before compaction
+  | 'setup-init'           // NEW: One-time initialization
+  | 'setup-maintenance'    // NEW: Periodic maintenance
+  | 'permission-request';  // NEW: Smart auto-approval
 
 /**
  * Extract prompt text from various input formats
@@ -530,6 +561,36 @@ export async function processHook(
 
       case 'autopilot':
         return processAutopilot(input);
+
+      // New async hook types
+      case 'session-end':
+        return await handleSessionEnd(input as unknown as SessionEndInput);
+
+      case 'subagent-start':
+        return processSubagentStart(input as unknown as SubagentStartInput);
+
+      case 'subagent-stop':
+        return processSubagentStop(input as unknown as SubagentStopInput);
+
+      case 'pre-compact':
+        return await processPreCompact(input as unknown as PreCompactInput);
+
+      case 'setup-init':
+        return await processSetup({
+          ...input,
+          trigger: 'init',
+          hook_event_name: 'Setup'
+        } as unknown as SetupInput);
+
+      case 'setup-maintenance':
+        return await processSetup({
+          ...input,
+          trigger: 'maintenance',
+          hook_event_name: 'Setup'
+        } as unknown as SetupInput);
+
+      case 'permission-request':
+        return await handlePermissionRequest(input as unknown as PermissionRequestInput);
 
       default:
         return { continue: true };
