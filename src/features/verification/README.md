@@ -131,7 +131,9 @@ if (validation.valid) {
 ## Integration
 
 ### Ralph Loop
-Ralph uses the verification protocol to ensure task completion before outputting the promise token:
+Ralph uses the verification protocol to ensure task completion before outputting the promise token.
+
+**DEPRECATED**: The `<promise>` completion pattern is being phased out. New sessions use `/oh-my-claudecode:cancel` for clean exit. Remove in next major version.
 
 ```typescript
 const protocol = createProtocol('ralph', 'Ralph completion verification', [
@@ -146,6 +148,8 @@ const checklist = createChecklist(protocol);
 await runVerification(checklist);
 
 if (checklist.summary?.verdict === 'approved') {
+  // DEPRECATED: The <promise> completion pattern is being phased out.
+  // New sessions use /oh-my-claudecode:cancel for clean exit. Remove in next major version.
   console.log('<promise>TASK_COMPLETE</promise>');
 }
 ```

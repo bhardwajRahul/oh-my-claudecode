@@ -1,6 +1,9 @@
 /**
  * Ralph Verifier
  *
+ * DEPRECATED: The <promise> completion pattern is being phased out.
+ * New sessions use /oh-my-claudecode:cancel for clean exit. Remove in next major version.
+ *
  * Adds architect verification to ralph completion claims.
  * When ralph outputs a completion promise, instead of immediately
  * accepting it, we trigger an architect verification phase.
@@ -189,7 +192,8 @@ ${state.architect_feedback ? `**Previous Architect Feedback (rejected):**\n${sta
    - If APPROVED: Output \`<architect-approved>VERIFIED_COMPLETE</architect-approved>\`
    - If REJECTED: Continue working on the identified issues
 
-DO NOT output the completion promise again until Architect approves.
+DEPRECATED: DO NOT output the completion promise again until Architect approves.
+(New sessions use /oh-my-claudecode:cancel for clean exit)
 
 </ralph-verification>
 
@@ -218,7 +222,8 @@ ${state.original_task}
 
 1. Address ALL issues identified by Architect
 2. Do NOT claim completion again until issues are fixed
-3. When truly done, output the completion promise again
+3. DEPRECATED: When truly done, output the completion promise again
+   (New sessions use /oh-my-claudecode:cancel for clean exit)
 4. Another Architect verification will be triggered
 
 Continue working now.

@@ -4,6 +4,9 @@
  * Self-referential work loop that continues until a completion promise is detected.
  * Named after the character who keeps working until the job is done.
  *
+ * DEPRECATED: The <promise> completion pattern is being phased out.
+ * New sessions use /oh-my-claudecode:cancel for clean exit. Remove in next major version.
+ *
  * Enhanced with PRD (Product Requirements Document) support for structured task tracking.
  * When a prd.json exists, completion is based on all stories having passes: true.
  *
@@ -56,7 +59,7 @@ export interface RalphLoopState {
   iteration: number;
   /** Maximum iterations before stopping */
   max_iterations: number;
-  /** The promise phrase to detect for completion */
+  /** DEPRECATED: The promise phrase to detect for completion */
   completion_promise: string;
   /** When the loop started */
   started_at: string;
@@ -76,7 +79,7 @@ export interface RalphLoopState {
 export interface RalphLoopOptions {
   /** Maximum iterations (default: 10) */
   maxIterations?: number;
-  /** Custom completion promise (default: "TASK_COMPLETE") */
+  /** DEPRECATED: Custom completion promise (default: "TASK_COMPLETE") */
   completionPromise?: string;
   /** Disable auto-activation of ultrawork (default: false - ultrawork is enabled) */
   disableUltrawork?: boolean;
@@ -202,6 +205,9 @@ export function incrementRalphIteration(directory: string): RalphLoopState | nul
 
 /**
  * Detect completion promise in session transcript
+ *
+ * DEPRECATED: The <promise> completion pattern is being phased out.
+ * New sessions use /oh-my-claudecode:cancel for clean exit. Remove in next major version.
  */
 export function detectCompletionPromise(
   sessionId: string,
@@ -219,6 +225,8 @@ export function detectCompletionPromise(
     if (existsSync(transcriptPath)) {
       try {
         const content = readFileSync(transcriptPath, 'utf-8');
+        // DEPRECATED: The <promise> completion pattern is being phased out.
+        // New sessions use /oh-my-claudecode:cancel for clean exit. Remove in next major version.
         const pattern = new RegExp(`<promise>\\s*${escapeRegex(promise)}\\s*</promise>`, 'is');
         if (pattern.test(content)) {
           return true;
