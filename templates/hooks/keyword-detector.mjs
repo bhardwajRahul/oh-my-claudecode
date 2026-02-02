@@ -89,11 +89,12 @@ function sanitizeForKeywordDetection(text) {
 }
 
 // Create state file for a mode
-function activateState(directory, prompt, stateName) {
+function activateState(directory, prompt, stateName, sessionId) {
   const state = {
     active: true,
     started_at: new Date().toISOString(),
     original_prompt: prompt,
+    session_id: sessionId || undefined,
     reinforcement_count: 0,
     last_checked_at: new Date().toISOString()
   };
@@ -350,9 +351,10 @@ async function main() {
     }
 
     // Activate states for modes that need them
+    const sessionId = data.sessionId || data.session_id || '';
     const stateModes = resolved.filter(m => ['ralph', 'autopilot', 'ultrapilot', 'ultrawork', 'ecomode'].includes(m.name));
     for (const mode of stateModes) {
-      activateState(directory, prompt, mode.name);
+      activateState(directory, prompt, mode.name, sessionId);
     }
 
     // Special: Ralph with ultrawork (only if ecomode NOT present)
@@ -360,7 +362,7 @@ async function main() {
     const hasEcomode = resolved.some(m => m.name === 'ecomode');
     const hasUltrawork = resolved.some(m => m.name === 'ultrawork');
     if (hasRalph && !hasEcomode && !hasUltrawork) {
-      activateState(directory, prompt, 'ultrawork');
+      activateState(directory, prompt, 'ultrawork', sessionId);
     }
 
     // Handle ultrathink specially - prepend message instead of skill invocation

@@ -338,7 +338,10 @@ async function main() {
 
     // Priority 7: Ultrawork - ALWAYS continue while active (not just when tasks exist)
     // This prevents false stops from bash errors, transient failures, etc.
-    if (ultrawork.state?.active && !isStaleState(ultrawork.state)) {
+    // Session isolation: only block if state belongs to this session (issue #311)
+    // If state has session_id, it must match. If no session_id (legacy), allow.
+    if (ultrawork.state?.active && !isStaleState(ultrawork.state) &&
+        (!ultrawork.state.session_id || ultrawork.state.session_id === sessionId)) {
       const newCount = (ultrawork.state.reinforcement_count || 0) + 1;
       const maxReinforcements = ultrawork.state.max_reinforcements || 50;
 

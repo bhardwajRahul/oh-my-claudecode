@@ -116,6 +116,7 @@ async function main() {
     try { data = JSON.parse(input); } catch {}
 
     const directory = data.directory || process.cwd();
+    const sessionId = data.sessionId || data.session_id || '';
     const messages = [];
 
     // Check for updates (non-blocking)
@@ -142,11 +143,11 @@ To update, run: claude /install-plugin oh-my-claudecode
 `);
     }
 
-    // Check for ultrawork state
+    // Check for ultrawork state - only restore if session matches (issue #311)
     const ultraworkState = readJsonFile(join(directory, '.omc', 'ultrawork-state.json'))
       || readJsonFile(join(homedir(), '.claude', 'ultrawork-state.json'));
 
-    if (ultraworkState?.active) {
+    if (ultraworkState?.active && (!ultraworkState.session_id || ultraworkState.session_id === sessionId)) {
       messages.push(`<session-restore>
 
 [ULTRAWORK MODE RESTORED]
