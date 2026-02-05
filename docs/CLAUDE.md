@@ -261,7 +261,7 @@ When you detect trigger patterns above, you MUST invoke the corresponding skill 
 
 **Protocol:**
 1. **MCP-DIRECT:** For tasks in the replacement table, call MCP tools directly — don't spawn Claude agents
-2. **Context packaging:** ALWAYS attach relevant `context_files` — MCPs cannot read the repo directly
+2. **Context packaging:** ALWAYS attach relevant `context_files` — the MCP wrapper cannot read files, but the CLI (in auto mode) has full filesystem access during execution
 3. **Graceful fallback:** If MCP unavailable/fails, THEN spawn the equivalent Claude agent
 4. **Critical evaluation:** MCP output is advisory — verification (tests, typecheck) must come from tool-using agents
 5. **Background pattern:** Use `background: true` for long MCP calls, check with `check_job_status`
@@ -284,16 +284,23 @@ When you detect trigger patterns above, you MUST invoke the corresponding skill 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `agent_role` | string | Yes | Agent perspective (see routing table above) |
-| `prompt_file` | string | Yes | Required. Path to file containing the prompt. Write prompts under `{working_directory}/.omc/prompts/` using naming convention `{tool}-{purpose}-{timestamp}.md` (e.g., `codex-arch-review-20260205.md`). Must use absolute path within `working_directory`. |
-| `output_file` | string | No | Path to write response; stdout written directly to output_file if CLI doesn't |
+| `prompt_file` | string | Yes | Path to file containing **task instructions** (what the CLI should do). Write under `{working_directory}/.omc/prompts/` using naming convention `{tool}-{purpose}-{timestamp}.md`. |
+| `output_file` | string | No | Path for **work summary** (what was done). The CLI may write here directly via shell, or the wrapper writes stdout if not. Use `-summary.md` suffix. |
 | `files` / `context_files` | array | No | File paths to include as context |
 | `model` | string | No | Model to use (has defaults and fallback chains) |
 | `background` | boolean | No | Run in background (non-blocking) |
 
 **Notes:**
-- The `prompt` parameter has been removed. Always write prompts to a file and use `prompt_file`.
-- When `output_file` is specified, the prompt includes an instruction nudging the CLI to write there
+- Write task instructions to `prompt_file`, not inline prompts
+- **Two-layer model**: The MCP wrapper reads `context_files` to build the prompt; the CLI (Codex/Gemini in --full-auto/--yolo mode) has full filesystem access during execution
+- The CLI can read additional files and write directly to `output_file` or other files
 - `prompt_file` must be within the project working directory (security boundary)
+
+**Semantic Model:**
+- `prompt_file`: Task instructions ("Refactor X", "Review Y", "Fix Z")
+- `output_file`: Work summary/report (what was done, decisions made)
+- `context_files`: Initial context for prompt assembly
+- **Direct edits**: The CLI can read/write any file in the working directory
 
 ### Background Orchestration Pattern (Spawn → Check → Await)
 
