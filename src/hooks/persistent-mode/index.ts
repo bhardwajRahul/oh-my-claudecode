@@ -96,7 +96,11 @@ export function readLastToolError(directory: string): ToolErrorState | null {
     }
 
     // Check staleness - errors older than 60 seconds are ignored
-    const age = Date.now() - new Date(toolError.timestamp).getTime();
+    const parsedTime = new Date(toolError.timestamp).getTime();
+    if (!Number.isFinite(parsedTime)) {
+      return null;
+    }
+    const age = Date.now() - parsedTime;
     if (age > 60000) {
       return null;
     }
@@ -354,7 +358,7 @@ async function checkRalphLoop(
     : `2. Check your todo list - are ALL items marked complete?`;
 
   let continuationPrompt = `<ralph-continuation>
-
+${errorGuidance ? errorGuidance + '\n' : ''}
 [RALPH - ITERATION ${newState.iteration}/${newState.max_iterations}]
 
 The task is NOT complete yet. Continue working.
@@ -373,16 +377,6 @@ ${newState.prompt ? `Original task: ${newState.prompt}` : ''}
 ---
 
 `;
-
-  // Prepend error guidance if present
-  if (errorGuidance) {
-    continuationPrompt = errorGuidance + continuationPrompt;
-  }
-
-  // Clear error state after message generation
-  if (toolError) {
-    clearToolErrorState(workingDir);
-  }
 
   return {
     shouldBlock: true,

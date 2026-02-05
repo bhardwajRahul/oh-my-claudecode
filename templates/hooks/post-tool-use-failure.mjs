@@ -4,23 +4,36 @@
 // Writes last-tool-error.json with tool name, input preview, error, and retry count
 
 import { existsSync, readFileSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join, dirname, sep, resolve } from 'path';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Dynamic imports for shared modules
-const { readStdin } = await import(join(__dirname, 'lib', 'stdin.mjs'));
-const { atomicWriteFileSync } = await import(join(__dirname, 'lib', 'atomic-write.mjs'));
+const { readStdin } = await import(pathToFileURL(join(__dirname, 'lib', 'stdin.mjs')).href);
+const { atomicWriteFileSync } = await import(pathToFileURL(join(__dirname, 'lib', 'atomic-write.mjs')).href);
 
 // Constants
 const RETRY_WINDOW_MS = 60000; // 60 seconds
 const MAX_ERROR_LENGTH = 500;
 const MAX_INPUT_PREVIEW_LENGTH = 200;
 
+// Validate that targetPath is contained within basePath (prevent path traversal)
+function isPathContained(targetPath, basePath) {
+  const normalizedTarget = resolve(targetPath);
+  const normalizedBase = resolve(basePath);
+  return normalizedTarget.startsWith(normalizedBase + sep) || normalizedTarget === normalizedBase;
+}
+
 // Initialize .omc directory if needed
 function initOmcDir(directory) {
+  const cwd = process.cwd();
+  // Validate directory is contained within cwd
+  if (!isPathContained(directory, cwd)) {
+    // Fallback to cwd if directory attempts traversal
+    directory = cwd;
+  }
   const omcDir = join(directory, '.omc');
   const stateDir = join(omcDir, 'state');
 
@@ -73,6 +86,10 @@ function calculateRetryCount(existingState, toolName, currentTime) {
   }
 
   const lastErrorTime = new Date(existingState.timestamp).getTime();
+  // Guard against NaN from invalid timestamps
+  if (!Number.isFinite(lastErrorTime)) {
+    return 1; // Treat as first failure if timestamp is invalid
+  }
   const timeDiff = currentTime - lastErrorTime;
 
   if (timeDiff > RETRY_WINDOW_MS) {

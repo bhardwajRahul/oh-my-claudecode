@@ -21,7 +21,7 @@ import {
 } from './state.js';
 import { getPhasePrompt } from './prompts.js';
 import type { AutopilotState, AutopilotPhase, AutopilotSignal } from './types.js';
-import { readLastToolError, clearToolErrorState, getToolErrorRetryGuidance, type ToolErrorState } from '../persistent-mode/index.js';
+import { readLastToolError, getToolErrorRetryGuidance, type ToolErrorState } from '../persistent-mode/index.js';
 
 export interface AutopilotEnforcementResult {
   /** Whether to block the stop event */
@@ -241,7 +241,7 @@ function generateContinuationPrompt(
   });
 
   let continuationPrompt = `<autopilot-continuation>
-
+${errorGuidance ? errorGuidance + '\n' : ''}
 [AUTOPILOT - PHASE: ${state.phase.toUpperCase()} | ITERATION ${state.iteration}/${state.max_iterations}]
 
 Your previous response did not signal phase completion. Continue working on the current phase.
@@ -260,16 +260,6 @@ IMPORTANT: When the phase is complete, output the appropriate signal:
 ---
 
 `;
-
-  // Prepend error guidance if present
-  if (errorGuidance) {
-    continuationPrompt = errorGuidance + continuationPrompt;
-  }
-
-  // Clear error state after message generation
-  if (toolError) {
-    clearToolErrorState(directory);
-  }
 
   return {
     shouldBlock: true,

@@ -62,7 +62,11 @@ function readLastToolError(stateDir) {
   if (!toolError || !toolError.timestamp) return null;
 
   // Check staleness - errors older than 60 seconds are ignored
-  const age = Date.now() - new Date(toolError.timestamp).getTime();
+  const parsedTime = new Date(toolError.timestamp).getTime();
+  if (!Number.isFinite(parsedTime)) {
+    return null; // Invalid timestamp = stale
+  }
+  const age = Date.now() - parsedTime;
   if (age > 60000) return null;
 
   return toolError;
@@ -460,10 +464,6 @@ async function main() {
           reason = errorGuidance + reason;
         }
 
-        if (toolError) {
-          clearToolErrorState(stateDir);
-        }
-
         console.log(
           JSON.stringify({
             decision: "block",
@@ -494,10 +494,6 @@ async function main() {
           let reason = `[AUTOPILOT - Phase: ${phase}] Autopilot not complete. Continue working. When all phases are complete, run /oh-my-claudecode:cancel to cleanly exit and clean up state files. If cancel fails, retry with /oh-my-claudecode:cancel --force.`;
           if (errorGuidance) {
             reason = errorGuidance + reason;
-          }
-
-          if (toolError) {
-            clearToolErrorState(stateDir);
           }
 
           console.log(
@@ -536,10 +532,6 @@ async function main() {
             reason = errorGuidance + reason;
           }
 
-          if (toolError) {
-            clearToolErrorState(stateDir);
-          }
-
           console.log(
             JSON.stringify({
               decision: "block",
@@ -576,10 +568,6 @@ async function main() {
             reason = errorGuidance + reason;
           }
 
-          if (toolError) {
-            clearToolErrorState(stateDir);
-          }
-
           console.log(
             JSON.stringify({
               decision: "block",
@@ -614,10 +602,6 @@ async function main() {
             reason = errorGuidance + reason;
           }
 
-          if (toolError) {
-            clearToolErrorState(stateDir);
-          }
-
           console.log(
             JSON.stringify({
               decision: "block",
@@ -648,10 +632,6 @@ async function main() {
         let reason = `[ULTRAQA - Cycle ${cycle + 1}/${maxCycles}] Tests not all passing. Continue fixing. When all tests pass, run /oh-my-claudecode:cancel to cleanly exit and clean up state files. If cancel fails, retry with /oh-my-claudecode:cancel --force.`;
         if (errorGuidance) {
           reason = errorGuidance + reason;
-        }
-
-        if (toolError) {
-          clearToolErrorState(stateDir);
         }
 
         console.log(
@@ -712,10 +692,6 @@ async function main() {
         reason = errorGuidance + reason;
       }
 
-      if (toolError) {
-        clearToolErrorState(stateDir);
-      }
-
       console.log(JSON.stringify({ decision: "block", reason }));
       return;
     }
@@ -757,10 +733,6 @@ async function main() {
 
       if (errorGuidance) {
         reason = errorGuidance + reason;
-      }
-
-      if (toolError) {
-        clearToolErrorState(stateDir);
       }
 
       console.log(JSON.stringify({ decision: "block", reason }));

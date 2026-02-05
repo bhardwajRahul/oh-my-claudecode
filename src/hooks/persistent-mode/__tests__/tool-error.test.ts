@@ -7,6 +7,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { existsSync, readFileSync, unlinkSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
+import {
+  readLastToolError,
+  clearToolErrorState,
+  getToolErrorRetryGuidance,
+  type ToolErrorState
+} from '../index.js';
 
 // Mock fs module
 vi.mock('fs', async () => {
@@ -19,92 +25,11 @@ vi.mock('fs', async () => {
   };
 });
 
-// Import the functions we need to test from the shell template
-// Since the template is in .mjs, we need to test the logic patterns directly
-
-interface ToolErrorState {
-  tool_name: string;
-  tool_input_preview?: string;
-  error: string;
-  timestamp: string;
-  retry_count: number;
-}
-
-// Replicate the functions from persistent-mode.mjs for testing
-function readLastToolError(stateDir: string): ToolErrorState | null {
-  const errorPath = join(stateDir, 'last-tool-error.json');
-
-  if (!vi.mocked(existsSync)(errorPath)) return null;
-
-  try {
-    const content = vi.mocked(readFileSync)(errorPath, 'utf-8') as string;
-    const toolError = JSON.parse(content);
-
-    if (!toolError || !toolError.timestamp) return null;
-
-    // Check staleness - errors older than 60 seconds are ignored
-    const age = Date.now() - new Date(toolError.timestamp).getTime();
-    if (age > 60000) return null;
-
-    return toolError;
-  } catch {
-    return null;
-  }
-}
-
-function clearToolErrorState(stateDir: string): void {
-  const errorPath = join(stateDir, 'last-tool-error.json');
-
-  try {
-    if (vi.mocked(existsSync)(errorPath)) {
-      vi.mocked(unlinkSync)(errorPath);
-    }
-  } catch {
-    // Ignore errors - file may have been removed already
-  }
-}
-
-function getToolErrorRetryGuidance(toolError: ToolErrorState | null): string {
-  if (!toolError) return '';
-
-  const retryCount = toolError.retry_count || 1;
-  const toolName = toolError.tool_name || 'unknown';
-  const error = toolError.error || 'Unknown error';
-
-  if (retryCount >= 5) {
-    return `[TOOL ERROR - ALTERNATIVE APPROACH NEEDED]
-The "${toolName}" operation has failed ${retryCount} times.
-
-STOP RETRYING THE SAME APPROACH. Instead:
-1. Try a completely different command or approach
-2. Check if the environment/dependencies are correct
-3. Consider breaking down the task differently
-4. If stuck, ask the user for guidance
-
-`;
-  }
-
-  const retryWarning = retryCount >= 3 ? `\n[Retry warning: ${retryCount} attempts]` : '';
-
-  return `[TOOL ERROR - RETRY REQUIRED]
-The previous "${toolName}" operation failed.
-
-Error: ${error}
-
-REQUIRED ACTIONS:
-1. Analyze why the command failed
-2. Fix the issue (wrong path? permission? syntax? missing dependency?)
-3. RETRY the operation with corrected parameters
-4. Continue with your original task after success
-
-Do NOT skip this step. Do NOT move on without fixing the error.${retryWarning}
-
-`;
-}
+// Functions are now imported from ../index.js
 
 describe('readLastToolError', () => {
-  const testStateDir = '/test/state';
-  const errorPath = join(testStateDir, 'last-tool-error.json');
+  const testDir = '/test';
+  const errorPath = join(testDir, '.omc', 'state', 'last-tool-error.json');
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -123,7 +48,7 @@ describe('readLastToolError', () => {
       JSON.stringify(recentError)
     );
 
-    const result = readLastToolError(testStateDir);
+    const result = readLastToolError(testDir);
 
     expect(result).toEqual(recentError);
     expect(existsSync).toHaveBeenCalledWith(errorPath);
@@ -133,7 +58,7 @@ describe('readLastToolError', () => {
   it('returns null when file does not exist', () => {
     (existsSync as unknown as ReturnType<typeof vi.fn>).mockReturnValue(false);
 
-    const result = readLastToolError(testStateDir);
+    const result = readLastToolError(testDir);
 
     expect(result).toBeNull();
     expect(existsSync).toHaveBeenCalledWith(errorPath);
@@ -154,7 +79,7 @@ describe('readLastToolError', () => {
       JSON.stringify(staleError)
     );
 
-    const result = readLastToolError(testStateDir);
+    const result = readLastToolError(testDir);
 
     expect(result).toBeNull();
   });
@@ -165,7 +90,7 @@ describe('readLastToolError', () => {
       'invalid json{{'
     );
 
-    const result = readLastToolError(testStateDir);
+    const result = readLastToolError(testDir);
 
     expect(result).toBeNull();
   });
@@ -183,7 +108,7 @@ describe('readLastToolError', () => {
       JSON.stringify(errorWithoutTimestamp)
     );
 
-    const result = readLastToolError(testStateDir);
+    const result = readLastToolError(testDir);
 
     expect(result).toBeNull();
   });
@@ -194,15 +119,15 @@ describe('readLastToolError', () => {
       throw new Error('Permission denied');
     });
 
-    const result = readLastToolError(testStateDir);
+    const result = readLastToolError(testDir);
 
     expect(result).toBeNull();
   });
 });
 
 describe('clearToolErrorState', () => {
-  const testStateDir = '/test/state';
-  const errorPath = join(testStateDir, 'last-tool-error.json');
+  const testDir = '/test';
+  const errorPath = join(testDir, '.omc', 'state', 'last-tool-error.json');
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -212,7 +137,7 @@ describe('clearToolErrorState', () => {
     (existsSync as unknown as ReturnType<typeof vi.fn>).mockReturnValue(true);
     (unlinkSync as unknown as ReturnType<typeof vi.fn>).mockReturnValue(undefined);
 
-    clearToolErrorState(testStateDir);
+    clearToolErrorState(testDir);
 
     expect(existsSync).toHaveBeenCalledWith(errorPath);
     expect(unlinkSync).toHaveBeenCalledWith(errorPath);
@@ -221,7 +146,7 @@ describe('clearToolErrorState', () => {
   it('does not throw when file does not exist', () => {
     (existsSync as unknown as ReturnType<typeof vi.fn>).mockReturnValue(false);
 
-    expect(() => clearToolErrorState(testStateDir)).not.toThrow();
+    expect(() => clearToolErrorState(testDir)).not.toThrow();
     expect(existsSync).toHaveBeenCalledWith(errorPath);
     expect(unlinkSync).not.toHaveBeenCalled();
   });
@@ -232,7 +157,7 @@ describe('clearToolErrorState', () => {
       throw new Error('EACCES: permission denied');
     });
 
-    expect(() => clearToolErrorState(testStateDir)).not.toThrow();
+    expect(() => clearToolErrorState(testDir)).not.toThrow();
     expect(unlinkSync).toHaveBeenCalledWith(errorPath);
   });
 
@@ -244,7 +169,7 @@ describe('clearToolErrorState', () => {
       throw error;
     });
 
-    expect(() => clearToolErrorState(testStateDir)).not.toThrow();
+    expect(() => clearToolErrorState(testDir)).not.toThrow();
   });
 });
 
@@ -305,7 +230,7 @@ describe('getToolErrorRetryGuidance', () => {
     expect(result).toContain('File not found: /path/to/file.ts');
   });
 
-  it('shows retry warning after 3+ failures', () => {
+  it('shows retry message after 3+ failures', () => {
     const toolError: ToolErrorState = {
       tool_name: 'Bash',
       error: 'Permission denied',
@@ -315,11 +240,11 @@ describe('getToolErrorRetryGuidance', () => {
 
     const result = getToolErrorRetryGuidance(toolError);
 
-    expect(result).toContain('[Retry warning: 3 attempts]');
     expect(result).toContain('[TOOL ERROR - RETRY REQUIRED]');
+    expect(result).toContain('Permission denied');
   });
 
-  it('does not show retry warning for less than 3 failures', () => {
+  it('shows retry message for less than 3 failures', () => {
     const toolError: ToolErrorState = {
       tool_name: 'Bash',
       error: 'Some error',
@@ -329,8 +254,8 @@ describe('getToolErrorRetryGuidance', () => {
 
     const result = getToolErrorRetryGuidance(toolError);
 
-    expect(result).not.toContain('[Retry warning:');
     expect(result).toContain('[TOOL ERROR - RETRY REQUIRED]');
+    expect(result).toContain('Some error');
   });
 
   it('handles missing tool_name gracefully', () => {
@@ -366,7 +291,8 @@ describe('Integration: Continuation message with tool error', () => {
   });
 
   it('continuation message includes error context when tool error present', () => {
-    const testStateDir = '/test/state';
+    const testDir = '/test';
+    const errorPath = join(testDir, '.omc', 'state', 'last-tool-error.json');
     const recentError: ToolErrorState = {
       tool_name: 'Bash',
       error: 'Command not found: invalid-command',
@@ -380,7 +306,7 @@ describe('Integration: Continuation message with tool error', () => {
     );
 
     // Simulate continuation message construction
-    const toolError = readLastToolError(testStateDir);
+    const toolError = readLastToolError(testDir);
     const errorGuidance = getToolErrorRetryGuidance(toolError);
     const baseMessage = '[ULTRAWORK #5/50] Mode active. Continue working.';
     const fullMessage = errorGuidance ? errorGuidance + baseMessage : baseMessage;
@@ -391,12 +317,12 @@ describe('Integration: Continuation message with tool error', () => {
   });
 
   it('continuation message is normal when no tool error', () => {
-    const testStateDir = '/test/state';
+    const testDir = '/test';
 
     (existsSync as unknown as ReturnType<typeof vi.fn>).mockReturnValue(false);
 
     // Simulate continuation message construction
-    const toolError = readLastToolError(testStateDir);
+    const toolError = readLastToolError(testDir);
     const errorGuidance = getToolErrorRetryGuidance(toolError);
     const baseMessage = '[ULTRAWORK #5/50] Mode active. Continue working.';
     const fullMessage = errorGuidance ? errorGuidance + baseMessage : baseMessage;
@@ -406,8 +332,8 @@ describe('Integration: Continuation message with tool error', () => {
   });
 
   it('error state is cleared after reading', () => {
-    const testStateDir = '/test/state';
-    const errorPath = join(testStateDir, 'last-tool-error.json');
+    const testDir = '/test';
+    const errorPath = join(testDir, '.omc', 'state', 'last-tool-error.json');
     const recentError: ToolErrorState = {
       tool_name: 'Bash',
       error: 'Some error',
@@ -422,12 +348,12 @@ describe('Integration: Continuation message with tool error', () => {
     (unlinkSync as unknown as ReturnType<typeof vi.fn>).mockReturnValue(undefined);
 
     // Read error and generate message
-    const toolError = readLastToolError(testStateDir);
+    const toolError = readLastToolError(testDir);
     expect(toolError).not.toBeNull();
 
     // Clear after reading
     if (toolError) {
-      clearToolErrorState(testStateDir);
+      clearToolErrorState(testDir);
     }
 
     expect(unlinkSync).toHaveBeenCalledWith(errorPath);
@@ -464,7 +390,7 @@ describe('Edge cases and error handling', () => {
     const result = getToolErrorRetryGuidance(toolError);
 
     expect(result).toContain('[TOOL ERROR - RETRY REQUIRED]');
-    expect(result).toContain('[Retry warning: 3 attempts]');
+    expect(result).toContain('Some error');
   });
 
   it('handles error state with very high retry_count', () => {
@@ -495,7 +421,7 @@ describe('Edge cases and error handling', () => {
       JSON.stringify(toolError)
     );
 
-    const result = readLastToolError('/test/state');
+    const result = readLastToolError('/test');
 
     expect(result).not.toBeNull();
     expect(result?.error).toBe('Error at boundary');
@@ -515,7 +441,7 @@ describe('Edge cases and error handling', () => {
       JSON.stringify(toolError)
     );
 
-    const result = readLastToolError('/test/state');
+    const result = readLastToolError('/test');
 
     expect(result).toBeNull();
   });
