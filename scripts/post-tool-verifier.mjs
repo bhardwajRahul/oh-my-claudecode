@@ -311,17 +311,18 @@ async function main() {
     const input = await readStdin();
     const data = JSON.parse(input);
 
-    const toolName = data.toolName || '';
-    const toolOutput = data.toolOutput || '';
-    const sessionId = data.sessionId || 'unknown';
-    const directory = data.directory || process.cwd();
+    const toolName = data.tool_name || data.toolName || '';
+    const rawResponse = data.tool_response || data.toolOutput || '';
+    const toolOutput = typeof rawResponse === 'string' ? rawResponse : JSON.stringify(rawResponse);
+    const sessionId = data.session_id || data.sessionId || 'unknown';
+    const directory = data.cwd || data.directory || process.cwd();
 
     // Update session statistics
     const toolCount = updateStats(toolName, sessionId);
 
     // Append Bash commands to ~/.bash_history for terminal recall
     if ((toolName === 'Bash' || toolName === 'bash') && getBashHistoryConfig()) {
-      const toolInput = data.toolInput || data.tool_input || {};
+      const toolInput = data.tool_input || data.toolInput || {};
       const command = typeof toolInput === 'string' ? toolInput : (toolInput.command || '');
       appendToBashHistory(command);
     }
@@ -341,12 +342,13 @@ async function main() {
 
     // Build response - use hookSpecificOutput.additionalContext for PostToolUse
     const response = { continue: true };
-    const contextMessage = message;
-    if (contextMessage) {
+    if (message) {
       response.hookSpecificOutput = {
         hookEventName: 'PostToolUse',
-        additionalContext: contextMessage
+        additionalContext: message
       };
+    } else {
+      response.suppressOutput = true;
     }
 
     console.log(JSON.stringify(response, null, 2));

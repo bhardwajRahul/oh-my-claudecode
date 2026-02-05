@@ -119,8 +119,8 @@ async function main() {
   try {
     const input = await readStdin();
 
-    const toolName = extractJsonField(input, 'toolName', 'unknown');
-    const directory = extractJsonField(input, 'directory', process.cwd());
+    const toolName = extractJsonField(input, 'tool_name') || extractJsonField(input, 'toolName', 'unknown');
+    const directory = extractJsonField(input, 'cwd') || extractJsonField(input, 'directory', process.cwd());
 
     const todoStatus = getTodoStatus(directory);
 
@@ -128,7 +128,8 @@ async function main() {
     if (toolName === 'Task' || toolName === 'TaskCreate' || toolName === 'TaskUpdate') {
       let toolInput = null;
       try {
-        toolInput = JSON.parse(input).toolInput;
+        const parsed = JSON.parse(input);
+        toolInput = parsed.tool_input || parsed.toolInput;
       } catch {}
       message = generateAgentSpawnMessage(toolInput, directory, todoStatus);
     } else {

@@ -108,7 +108,7 @@ async function main() {
     // tool_response may be string or object — normalize to string for .includes() check
     const rawResponse = data.tool_response || data.toolOutput || '';
     const toolOutput = typeof rawResponse === 'string' ? rawResponse : JSON.stringify(rawResponse);
-    const directory = data.directory || process.cwd();
+    const directory = data.cwd || data.directory || process.cwd();
 
     // Only process Task tool output
     if (
@@ -117,13 +117,13 @@ async function main() {
       toolName !== 'TaskCreate' &&
       toolName !== 'TaskUpdate'
     ) {
-      console.log(JSON.stringify({ continue: true }));
+      console.log(JSON.stringify({ continue: true, suppressOutput: true }));
       return;
     }
 
     // Check for remember tags
     if (!toolOutput.includes('<remember')) {
-      console.log(JSON.stringify({ continue: true }));
+      console.log(JSON.stringify({ continue: true, suppressOutput: true }));
       return;
     }
 
@@ -131,9 +131,9 @@ async function main() {
     const notepadPath = initNotepad(directory);
     processRememberTags(toolOutput, notepadPath);
 
-    console.log(JSON.stringify({ continue: true }));
+    console.log(JSON.stringify({ continue: true, suppressOutput: true }));
   } catch (error) {
-    console.log(JSON.stringify({ continue: true }));
+    console.log(JSON.stringify({ continue: true, suppressOutput: true }));
   }
 }
 

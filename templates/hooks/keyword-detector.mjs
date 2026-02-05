@@ -226,7 +226,7 @@ async function main() {
 
     let data = {};
     try { data = JSON.parse(input); } catch {}
-    const directory = data.directory || process.cwd();
+    const directory = data.cwd || data.directory || process.cwd();
 
     const prompt = extractPrompt(input);
     if (!prompt) {
@@ -351,7 +351,7 @@ async function main() {
     }
 
     // Activate states for modes that need them
-    const sessionId = data.sessionId || data.session_id || '';
+    const sessionId = data.sessionId || data.session_id || data.sessionid || '';
     const stateModes = resolved.filter(m => ['ralph', 'autopilot', 'ultrapilot', 'ultrawork', 'ecomode'].includes(m.name));
     for (const mode of stateModes) {
       activateState(directory, prompt, mode.name, sessionId);
