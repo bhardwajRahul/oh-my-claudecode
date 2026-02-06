@@ -14263,6 +14263,23 @@ function executeCodexBackground(fullPrompt, modelInput, jobMeta, workingDirector
             const nextModel = remainingModels[0];
             const newRemainingModels = remainingModels.slice(1);
             const retryResult = trySpawnWithModel(nextModel, newRemainingModels);
+            if ("error" in retryResult) {
+              writeJobStatus({
+                ...initialStatus,
+                status: "failed",
+                completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+                error: `Fallback spawn failed for model ${nextModel}: ${retryResult.error}`
+              }, workingDirectory);
+            }
+            return;
+          }
+          if (modelErr.isError) {
+            writeJobStatus({
+              ...initialStatus,
+              status: "failed",
+              completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+              error: `All models in fallback chain failed. Last error: ${modelErr.message}`
+            }, workingDirectory);
             return;
           }
           const response = parseCodexOutput(stdout);

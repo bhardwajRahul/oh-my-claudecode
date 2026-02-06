@@ -84,7 +84,8 @@ function sanitizeForKeywordDetection(text) {
     .replace(/<\w[\w-]*(?:\s[^>]*)?\s*\/>/g, '')
     // 3. Strip URLs: http://... or https://... up to whitespace
     .replace(/https?:\/\/[^\s)>\]]+/g, '')
-    // 4. Strip file paths: /foo/bar/baz or foo/bar/baz (using lookbehind to avoid consuming leading char)
+    // 4. Strip file paths: /foo/bar/baz or foo/bar/baz — uses lookbehind (Node.js supports it)
+    // The TypeScript version (index.ts) uses capture group + $1 replacement for broader compat
     .replace(/(?<=^|[\s"'`(])(?:\/)?(?:[\w.-]+\/)+[\w.-]+/gm, '')
     // 5. Strip markdown code blocks (existing)
     .replace(/```[\s\S]*?```/g, '')

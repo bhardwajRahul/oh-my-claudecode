@@ -117,7 +117,8 @@ export function sanitizeForKeywordDetection(text: string): string {
     .replace(/<\w[\w-]*(?:\s[^>]*)?\s*\/>/g, '')
     // Strip URLs
     .replace(/https?:\/\/[^\s)>\]]+/g, '')
-    // Strip file paths (without lookbehind for broader compat)
+    // Strip file paths — uses capture group + $1 replacement instead of lookbehind
+    // for broader engine compatibility (the .mjs runtime uses lookbehind instead)
     .replace(/(^|[\s"'`(])(?:\/)?(?:[\w.-]+\/)+[\w.-]+/gm, '$1')
     // Strip markdown code blocks
     .replace(/```[\s\S]*?```/g, '')
@@ -194,16 +195,14 @@ export function detectKeywordsWithType(
  * Check if text contains any magic keyword
  */
 export function hasKeyword(text: string): boolean {
-  const cleanText = removeCodeBlocks(text);
-  return detectKeywordsWithType(cleanText).length > 0;
+  return detectKeywordsWithType(text).length > 0;
 }
 
 /**
  * Get all detected keywords with conflict resolution applied
  */
 export function getAllKeywords(text: string): KeywordType[] {
-  const cleanText = removeCodeBlocks(text);
-  const detected = detectKeywordsWithType(cleanText);
+  const detected = detectKeywordsWithType(text);
 
   if (detected.length === 0) return [];
 
@@ -240,8 +239,7 @@ export function getPrimaryKeyword(text: string): DetectedKeyword | null {
   const primaryType = allKeywords[0];
 
   // Find the original detected keyword for this type
-  const cleanText = removeCodeBlocks(text);
-  const detected = detectKeywordsWithType(cleanText);
+  const detected = detectKeywordsWithType(text);
   const match = detected.find(d => d.type === primaryType);
 
   return match || null;

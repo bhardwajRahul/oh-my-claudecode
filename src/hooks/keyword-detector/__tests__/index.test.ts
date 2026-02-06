@@ -75,6 +75,43 @@ World`);
     });
   });
 
+  describe('sanitizeForKeywordDetection', () => {
+    it('should strip XML tag blocks', () => {
+      const result = sanitizeForKeywordDetection('<system-reminder>ralph</system-reminder>');
+      expect(result).not.toContain('ralph');
+    });
+
+    it('should strip self-closing XML tags', () => {
+      const result = sanitizeForKeywordDetection('text <br /> more');
+      expect(result).not.toContain('<br');
+    });
+
+    it('should strip URLs', () => {
+      const result = sanitizeForKeywordDetection('see https://example.com/codex/path');
+      expect(result).not.toContain('codex');
+    });
+
+    it('should strip file paths', () => {
+      const result = sanitizeForKeywordDetection('open src/mcp/codex-core.ts');
+      expect(result).not.toContain('codex');
+    });
+
+    it('should strip markdown code blocks', () => {
+      const result = sanitizeForKeywordDetection('```\nask codex\n```');
+      expect(result).not.toContain('codex');
+    });
+
+    it('should strip inline code', () => {
+      const result = sanitizeForKeywordDetection('use `ask codex` command');
+      expect(result).not.toContain('codex');
+    });
+
+    it('should preserve normal text', () => {
+      const result = sanitizeForKeywordDetection('ask codex to review');
+      expect(result).toContain('ask codex');
+    });
+  });
+
   describe('extractPromptText', () => {
     it('should extract text from text parts', () => {
       const parts = [
@@ -458,6 +495,13 @@ World`);
         const result = detectKeywordsWithType(text);
         const autopilotMatches = result.filter((r) => r.type === 'autopilot');
         expect(autopilotMatches.length).toBeGreaterThan(0);
+      });
+
+      it('should not detect keyword inside XML tags', () => {
+        const text = '<system-reminder>ralph</system-reminder> hello';
+        const result = detectKeywordsWithType(text);
+        const ralphMatch = result.find((r) => r.type === 'ralph');
+        expect(ralphMatch).toBeUndefined();
       });
     });
 

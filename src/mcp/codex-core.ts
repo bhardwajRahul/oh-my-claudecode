@@ -362,7 +362,25 @@ export function executeCodexBackground(
             const nextModel = remainingModels[0];
             const newRemainingModels = remainingModels.slice(1);
             const retryResult = trySpawnWithModel(nextModel, newRemainingModels);
-            // Don't write status here - the retry will handle it
+            if ('error' in retryResult) {
+              // Retry spawn failed - write failed status
+              writeJobStatus({
+                ...initialStatus,
+                status: 'failed',
+                completedAt: new Date().toISOString(),
+                error: `Fallback spawn failed for model ${nextModel}: ${retryResult.error}`,
+              }, workingDirectory);
+            }
+            return;
+          }
+          if (modelErr.isError) {
+            // No remaining models and current model errored
+            writeJobStatus({
+              ...initialStatus,
+              status: 'failed',
+              completedAt: new Date().toISOString(),
+              error: `All models in fallback chain failed. Last error: ${modelErr.message}`,
+            }, workingDirectory);
             return;
           }
 
