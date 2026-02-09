@@ -21663,10 +21663,13 @@ Removed: ${statePath}`
       let clearedCount = 0;
       const errors = [];
       if (MODE_CONFIGS[mode]) {
-        if (clearModeState(mode, root)) {
-          clearedCount++;
-        } else {
-          errors.push("legacy path");
+        const legacyStatePath = getStateFilePath(root, mode);
+        if ((0, import_fs8.existsSync)(legacyStatePath)) {
+          if (clearModeState(mode, root)) {
+            clearedCount++;
+          } else {
+            errors.push("legacy path");
+          }
         }
       } else {
         const statePath = getStatePath(mode, root);
@@ -21682,10 +21685,13 @@ Removed: ${statePath}`
       const sessionIds = listSessionIds(root);
       for (const sid of sessionIds) {
         if (MODE_CONFIGS[mode]) {
-          if (clearModeState(mode, root, sid)) {
-            clearedCount++;
-          } else {
-            errors.push(`session: ${sid}`);
+          const sessionStatePath = getStateFilePath(root, mode, sid);
+          if ((0, import_fs8.existsSync)(sessionStatePath)) {
+            if (clearModeState(mode, root, sid)) {
+              clearedCount++;
+            } else {
+              errors.push(`session: ${sid}`);
+            }
           }
         } else {
           const statePath = resolveSessionStatePath(mode, sid, root);

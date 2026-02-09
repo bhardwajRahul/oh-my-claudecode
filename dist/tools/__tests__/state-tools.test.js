@@ -102,6 +102,102 @@ describe('state-tools', () => {
             expect(result.content[0].text).toContain('cleared');
             expect(existsSync(join(sessionDir, 'ralplan-state.json'))).toBe(false);
         });
+        it('should clear only the requested session for every execution mode', async () => {
+            const modes = ['autopilot', 'ultrapilot', 'pipeline', 'ralph', 'ultrawork', 'ultraqa', 'ecomode'];
+            const sessionA = 'session-a';
+            const sessionB = 'session-b';
+            for (const mode of modes) {
+                await stateWriteTool.handler({
+                    mode,
+                    state: { active: true, owner: 'A' },
+                    session_id: sessionA,
+                    workingDirectory: TEST_DIR,
+                });
+                await stateWriteTool.handler({
+                    mode,
+                    state: { active: true, owner: 'B' },
+                    session_id: sessionB,
+                    workingDirectory: TEST_DIR,
+                });
+                const clearResult = await stateClearTool.handler({
+                    mode,
+                    session_id: sessionA,
+                    workingDirectory: TEST_DIR,
+                });
+                expect(clearResult.content[0].text).toMatch(/cleared|Successfully/i);
+                const sessionAPath = join(TEST_DIR, '.omc', 'state', 'sessions', sessionA, `${mode}-state.json`);
+                const sessionBPath = join(TEST_DIR, '.omc', 'state', 'sessions', sessionB, `${mode}-state.json`);
+                expect(existsSync(sessionAPath)).toBe(false);
+                expect(existsSync(sessionBPath)).toBe(true);
+            }
+        });
+        it('should clear legacy and all sessions when session_id is omitted and show warning', async () => {
+            const sessionId = 'aggregate-clear';
+            await stateWriteTool.handler({
+                mode: 'ultrawork',
+                state: { active: true, source: 'legacy' },
+                workingDirectory: TEST_DIR,
+            });
+            await stateWriteTool.handler({
+                mode: 'ultrawork',
+                state: { active: true, source: 'session' },
+                session_id: sessionId,
+                workingDirectory: TEST_DIR,
+            });
+            const result = await stateClearTool.handler({
+                mode: 'ultrawork',
+                workingDirectory: TEST_DIR,
+            });
+            const legacyPath = join(TEST_DIR, '.omc', 'state', 'ultrawork-state.json');
+            const sessionPath = join(TEST_DIR, '.omc', 'state', 'sessions', sessionId, 'ultrawork-state.json');
+            expect(result.content[0].text).toContain('WARNING: No session_id provided');
+            expect(existsSync(legacyPath)).toBe(false);
+            expect(existsSync(sessionPath)).toBe(false);
+        });
+        it('should not report false errors for sessions with no state file during broad clear', async () => {
+            // Create a session directory but no state file for ralph mode
+            const sessionId = 'empty-session';
+            const sessionDir = join(TEST_DIR, '.omc', 'state', 'sessions', sessionId);
+            mkdirSync(sessionDir, { recursive: true });
+            // Note: no state file created - simulating a session with no ralph state
+            // Create state for a different mode in the same session
+            await stateWriteTool.handler({
+                mode: 'ultrawork',
+                state: { active: true },
+                session_id: sessionId,
+                workingDirectory: TEST_DIR,
+            });
+            // Now clear ralph mode (which has no state in this session)
+            const result = await stateClearTool.handler({
+                mode: 'ralph',
+                workingDirectory: TEST_DIR,
+            });
+            // Should report "No state found" not errors
+            expect(result.content[0].text).toContain('No state found');
+            expect(result.content[0].text).not.toContain('Errors:');
+        });
+        it('should only count actual deletions in broad clear count', async () => {
+            // Create state in only one session out of multiple
+            const sessionWithState = 'has-state';
+            const sessionWithoutState = 'no-state';
+            // Create session directories
+            mkdirSync(join(TEST_DIR, '.omc', 'state', 'sessions', sessionWithState), { recursive: true });
+            mkdirSync(join(TEST_DIR, '.omc', 'state', 'sessions', sessionWithoutState), { recursive: true });
+            // Only create state for one session
+            await stateWriteTool.handler({
+                mode: 'ralph',
+                state: { active: true },
+                session_id: sessionWithState,
+                workingDirectory: TEST_DIR,
+            });
+            const result = await stateClearTool.handler({
+                mode: 'ralph',
+                workingDirectory: TEST_DIR,
+            });
+            // Should report exactly 1 location cleared (the session with state)
+            expect(result.content[0].text).toContain('Locations cleared: 1');
+            expect(result.content[0].text).not.toContain('Errors:');
+        });
     });
     describe('state_list_active', () => {
         it('should list active modes in current session when session_id provided', async () => {

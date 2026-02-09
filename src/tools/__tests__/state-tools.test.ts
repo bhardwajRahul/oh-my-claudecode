@@ -198,6 +198,59 @@ describe('state-tools', () => {
       expect(existsSync(legacyPath)).toBe(false);
       expect(existsSync(sessionPath)).toBe(false);
     });
+
+    it('should not report false errors for sessions with no state file during broad clear', async () => {
+      // Create a session directory but no state file for ralph mode
+      const sessionId = 'empty-session';
+      const sessionDir = join(TEST_DIR, '.omc', 'state', 'sessions', sessionId);
+      mkdirSync(sessionDir, { recursive: true });
+      // Note: no state file created - simulating a session with no ralph state
+
+      // Create state for a different mode in the same session
+      await stateWriteTool.handler({
+        mode: 'ultrawork',
+        state: { active: true },
+        session_id: sessionId,
+        workingDirectory: TEST_DIR,
+      });
+
+      // Now clear ralph mode (which has no state in this session)
+      const result = await stateClearTool.handler({
+        mode: 'ralph',
+        workingDirectory: TEST_DIR,
+      });
+
+      // Should report "No state found" not errors
+      expect(result.content[0].text).toContain('No state found');
+      expect(result.content[0].text).not.toContain('Errors:');
+    });
+
+    it('should only count actual deletions in broad clear count', async () => {
+      // Create state in only one session out of multiple
+      const sessionWithState = 'has-state';
+      const sessionWithoutState = 'no-state';
+
+      // Create session directories
+      mkdirSync(join(TEST_DIR, '.omc', 'state', 'sessions', sessionWithState), { recursive: true });
+      mkdirSync(join(TEST_DIR, '.omc', 'state', 'sessions', sessionWithoutState), { recursive: true });
+
+      // Only create state for one session
+      await stateWriteTool.handler({
+        mode: 'ralph',
+        state: { active: true },
+        session_id: sessionWithState,
+        workingDirectory: TEST_DIR,
+      });
+
+      const result = await stateClearTool.handler({
+        mode: 'ralph',
+        workingDirectory: TEST_DIR,
+      });
+
+      // Should report exactly 1 location cleared (the session with state)
+      expect(result.content[0].text).toContain('Locations cleared: 1');
+      expect(result.content[0].text).not.toContain('Errors:');
+    });
   });
 
   describe('state_list_active', () => {

@@ -408,10 +408,14 @@ export const stateClearTool: ToolDefinition<{
 
       // Clear legacy path
       if (MODE_CONFIGS[mode as ExecutionMode]) {
-        if (clearModeState(mode as ExecutionMode, root)) {
-          clearedCount++;
-        } else {
-          errors.push('legacy path');
+        // Only clear if state file exists - avoid false counts for missing files
+        const legacyStatePath = getStateFilePath(root, mode as ExecutionMode);
+        if (existsSync(legacyStatePath)) {
+          if (clearModeState(mode as ExecutionMode, root)) {
+            clearedCount++;
+          } else {
+            errors.push('legacy path');
+          }
         }
       } else {
         const statePath = getStatePath(mode, root);
@@ -429,10 +433,14 @@ export const stateClearTool: ToolDefinition<{
       const sessionIds = listSessionIds(root);
       for (const sid of sessionIds) {
         if (MODE_CONFIGS[mode as ExecutionMode]) {
-          if (clearModeState(mode as ExecutionMode, root, sid)) {
-            clearedCount++;
-          } else {
-            errors.push(`session: ${sid}`);
+          // Only clear if state file exists - avoid false counts for missing files
+          const sessionStatePath = getStateFilePath(root, mode as ExecutionMode, sid);
+          if (existsSync(sessionStatePath)) {
+            if (clearModeState(mode as ExecutionMode, root, sid)) {
+              clearedCount++;
+            } else {
+              errors.push(`session: ${sid}`);
+            }
           }
         } else {
           const statePath = resolveSessionStatePath(mode, sid, root);
