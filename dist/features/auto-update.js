@@ -13,7 +13,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { execSync } from 'child_process';
-import { install as installSisyphus, HOOKS_DIR } from '../installer/index.js';
+import { install as installSisyphus, HOOKS_DIR, isProjectScopedPlugin } from '../installer/index.js';
 /** GitHub repository information */
 export const REPO_OWNER = 'Yeachan-Heo';
 export const REPO_NAME = 'oh-my-claudecode';
@@ -207,14 +207,17 @@ export async function checkForUpdates() {
  */
 export function reconcileUpdateRuntime(options) {
     const errors = [];
-    try {
-        if (!existsSync(HOOKS_DIR)) {
-            mkdirSync(HOOKS_DIR, { recursive: true });
+    const projectScopedPlugin = isProjectScopedPlugin();
+    if (!projectScopedPlugin) {
+        try {
+            if (!existsSync(HOOKS_DIR)) {
+                mkdirSync(HOOKS_DIR, { recursive: true });
+            }
         }
-    }
-    catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        errors.push(`Failed to prepare hooks directory: ${message}`);
+        catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            errors.push(`Failed to prepare hooks directory: ${message}`);
+        }
     }
     try {
         const installResult = installSisyphus({
@@ -222,7 +225,7 @@ export function reconcileUpdateRuntime(options) {
             verbose: options?.verbose ?? false,
             skipClaudeCheck: true,
             forceHooks: true,
-            refreshHooksInPlugin: true,
+            refreshHooksInPlugin: !projectScopedPlugin,
         });
         if (!installResult.success) {
             errors.push(...installResult.errors);

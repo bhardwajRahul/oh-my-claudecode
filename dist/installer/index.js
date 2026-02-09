@@ -603,7 +603,8 @@ export function install(options = {}) {
                                 if (hasNonOmcHook)
                                     break;
                             }
-                            if (hasNonOmcHook && !options.forceHooks) {
+                            const canOverrideNonOmc = options.forceHooks && !allowPluginHookRefresh;
+                            if (hasNonOmcHook && !canOverrideNonOmc) {
                                 // Conflict detected - don't overwrite
                                 log(`  [OMC] Warning: ${eventType} hook owned by another plugin. Skipping. Use --force-hooks to override.`);
                                 result.hookConflicts.push({ eventType, existingCommand: nonOmcCommand });
