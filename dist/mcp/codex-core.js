@@ -515,6 +515,7 @@ export async function handleAskCodex(args) {
     const config = loadConfig();
     const resolved = resolveExternalModel(config.externalModels, {
         agentRole: args.agent_role,
+        explicitProvider: 'codex',
         explicitModel: args.model, // user explicitly passed model
     });
     // Build fallback chain with resolved model as first candidate
