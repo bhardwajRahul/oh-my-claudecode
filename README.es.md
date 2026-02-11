@@ -139,6 +139,37 @@ omc wait --stop   # Deshabilitar demonio
 
 ---
 
+## Notificaciones
+
+Puedes recibir notificaciones en tiempo real para eventos del ciclo de vida de la sesión.
+
+Eventos compatibles:
+- `session-start`
+- `session-stop` (cuando un modo persistent entra en estado de espera/bloqueo)
+- `session-end`
+- `ask-user-question`
+
+### Configuración
+Agrega estas variables de entorno en tu perfil de shell (por ejemplo `~/.zshrc`, `~/.bashrc`):
+
+```bash
+# Discord Bot
+export OMC_DISCORD_NOTIFIER_BOT_TOKEN="your_bot_token"
+export OMC_DISCORD_NOTIFIER_CHANNEL="your_channel_id"
+
+# Telegram
+export OMC_TELEGRAM_BOT_TOKEN="your_bot_token"
+export OMC_TELEGRAM_CHAT_ID="your_chat_id"
+
+# Webhooks opcionales
+export OMC_DISCORD_WEBHOOK_URL="your_webhook_url"
+export OMC_SLACK_WEBHOOK_URL="your_webhook_url"
+```
+
+> Nota: las variables deben estar cargadas en el mismo shell donde ejecutas `claude`.
+
+---
+
 ## Documentación
 
 - **[Referencia Completa](docs/REFERENCE.md)** - Documentación completa de características

@@ -139,6 +139,37 @@ omc wait --stop   # 데몬 비활성화
 
 ---
 
+## 알림 (Notifications)
+
+세션 라이프사이클 이벤트에 대해 실시간 알림을 받을 수 있습니다.
+
+지원 이벤트:
+- `session-start`
+- `session-stop` (persistent 모드가 대기/블록 상태로 들어갈 때)
+- `session-end`
+- `ask-user-question`
+
+### 설정
+쉘 프로필(예: `~/.zshrc`, `~/.bashrc`)에 환경 변수를 추가하세요:
+
+```bash
+# Discord Bot
+export OMC_DISCORD_NOTIFIER_BOT_TOKEN="your_bot_token"
+export OMC_DISCORD_NOTIFIER_CHANNEL="your_channel_id"
+
+# Telegram
+export OMC_TELEGRAM_BOT_TOKEN="your_bot_token"
+export OMC_TELEGRAM_CHAT_ID="your_chat_id"
+
+# Optional webhooks
+export OMC_DISCORD_WEBHOOK_URL="your_webhook_url"
+export OMC_SLACK_WEBHOOK_URL="your_webhook_url"
+```
+
+> 참고: `claude`를 실행하는 동일한 쉘에서 환경 변수가 로드되어 있어야 합니다.
+
+---
+
 ## 문서
 
 - **[전체 레퍼런스](docs/REFERENCE.md)** - 완전한 기능 문서
