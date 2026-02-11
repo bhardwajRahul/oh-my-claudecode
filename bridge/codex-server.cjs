@@ -15346,7 +15346,7 @@ function persistPrompt(options) {
     const content = `${frontmatter}
 
 ${options.fullPrompt}`;
-    (0, import_fs6.writeFileSync)(filePath, content, "utf-8");
+    (0, import_fs6.writeFileSync)(filePath, content, { encoding: "utf-8", mode: 384 });
     return { filePath, id, slug };
   } catch (err) {
     console.warn(`[prompt-persistence] Failed to persist prompt: ${err.message}`);
@@ -15368,7 +15368,7 @@ function persistResponse(options) {
     const content = `${frontmatter}
 
 ${options.response}`;
-    (0, import_fs6.writeFileSync)(filePath, content, "utf-8");
+    (0, import_fs6.writeFileSync)(filePath, content, { encoding: "utf-8", mode: 384 });
     return filePath;
   } catch (err) {
     console.warn(`[prompt-persistence] Failed to persist response: ${err.message}`);
@@ -15393,7 +15393,7 @@ function writeJobStatus(status, workingDirectory) {
     (0, import_fs6.mkdirSync)(promptsDir, { recursive: true });
     const statusPath = getStatusFilePath(status.provider, status.slug, status.jobId, workingDirectory);
     const tempPath = statusPath + ".tmp";
-    (0, import_fs6.writeFileSync)(tempPath, JSON.stringify(status, null, 2), "utf-8");
+    (0, import_fs6.writeFileSync)(tempPath, JSON.stringify(status, null, 2), { encoding: "utf-8", mode: 384 });
     renameOverwritingSync(tempPath, statusPath);
     if (isJobDbInitialized()) {
       upsertJob(status);
@@ -17384,6 +17384,10 @@ path_policy: ${pathPolicy}`);
       }
     }
     const responseLines = [paramLines];
+    const fallbackLine = usedFallback ? `Fallback: used model ${actualModel}` : void 0;
+    if (fallbackLine) {
+      responseLines.push(fallbackLine);
+    }
     if (isInlineMode) {
       responseLines.push(`**Request ID:** ${inlineRequestId}`);
       const metadataText = responseLines.join("\n");

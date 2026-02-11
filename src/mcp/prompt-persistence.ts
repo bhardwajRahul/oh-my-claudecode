@@ -231,7 +231,7 @@ export function persistPrompt(options: PersistPromptOptions): PersistPromptResul
     const frontmatter = buildPromptFrontmatter(options);
     const content = `${frontmatter}\n\n${options.fullPrompt}`;
 
-    writeFileSync(filePath, content, 'utf-8');
+    writeFileSync(filePath, content, { encoding: 'utf-8', mode: 0o600 });
 
     return { filePath, id, slug };
   } catch (err) {
@@ -273,7 +273,7 @@ export function persistResponse(options: PersistResponseOptions): string | undef
     const frontmatter = buildResponseFrontmatter(options);
     const content = `${frontmatter}\n\n${options.response}`;
 
-    writeFileSync(filePath, content, 'utf-8');
+    writeFileSync(filePath, content, { encoding: 'utf-8', mode: 0o600 });
 
     return filePath;
   } catch (err) {
@@ -313,7 +313,7 @@ export function writeJobStatus(status: JobStatus, workingDirectory?: string): vo
     const statusPath = getStatusFilePath(status.provider, status.slug, status.jobId, workingDirectory);
     const tempPath = statusPath + '.tmp';
 
-    writeFileSync(tempPath, JSON.stringify(status, null, 2), 'utf-8');
+    writeFileSync(tempPath, JSON.stringify(status, null, 2), { encoding: 'utf-8', mode: 0o600 });
     renameOverwritingSync(tempPath, statusPath);
 
     // SQLite write-through: also persist to jobs.db if available

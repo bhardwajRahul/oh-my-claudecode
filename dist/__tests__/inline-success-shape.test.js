@@ -74,6 +74,8 @@ describe('Inline success response shape', () => {
         expect(result.content[0].text).toContain('Request ID');
         expect(result.content[0].text).toContain('Response File');
         expect(result.content[0].text).toMatch(/(inline-response|codex-response|gemini-response)/);
+        expect(result.content[0].text).not.toContain('--- UNTRUSTED CLI RESPONSE');
+        expect(result.content[0].text).not.toContain('--- END UNTRUSTED CLI RESPONSE');
         // Block 2: untrusted CLI response wrapper
         expect(result.content[1].type).toBe('text');
         expect(result.content[1].text).toContain('--- UNTRUSTED CLI RESPONSE');
@@ -108,6 +110,8 @@ describe('Inline success response shape', () => {
         expect(result.content[0].text).toContain('Request ID');
         expect(result.content[0].text).toContain('Response File');
         expect(result.content[0].text).toMatch(/(inline-response|codex-response|gemini-response)/);
+        expect(result.content[0].text).not.toContain('--- UNTRUSTED CLI RESPONSE');
+        expect(result.content[0].text).not.toContain('--- END UNTRUSTED CLI RESPONSE');
         // Block 2: untrusted CLI response wrapper
         expect(result.content[1].type).toBe('text');
         expect(result.content[1].text).toContain('--- UNTRUSTED CLI RESPONSE');

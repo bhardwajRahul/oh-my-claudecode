@@ -795,6 +795,10 @@ ${resolvedPrompt}`;
             }
         }
         const responseLines = [paramLines];
+        const fallbackLine = usedFallback ? `Fallback: used model ${actualModel}` : undefined;
+        if (fallbackLine) {
+            responseLines.push(fallbackLine);
+        }
         // In inline mode, return metadata + raw response as separate content blocks
         if (isInlineMode) {
             responseLines.push(`**Request ID:** ${inlineRequestId}`);
