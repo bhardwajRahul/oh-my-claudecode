@@ -73,7 +73,7 @@ export function renderRateLimits(limits: RateLimits | null): string | null {
 
   const parts = [fiveHourPart];
 
-  if (limits.weeklyPercent > 0) {
+  if (limits.weeklyPercent != null) {
     const weekly = Math.min(100, Math.max(0, Math.round(limits.weeklyPercent)));
     const weeklyColor = getColor(weekly);
     const weeklyReset = formatResetTime(limits.weeklyResetsAt);
@@ -113,7 +113,7 @@ export function renderRateLimitsCompact(limits: RateLimits | null): string | nul
 
   const parts = [`${fiveHourColor}${fiveHour}%${RESET}`];
 
-  if (limits.weeklyPercent > 0) {
+  if (limits.weeklyPercent != null) {
     const weekly = Math.min(100, Math.max(0, Math.round(limits.weeklyPercent)));
     const weeklyColor = getColor(weekly);
     parts.push(`${weeklyColor}${weekly}%${RESET}`);
@@ -152,7 +152,7 @@ export function renderRateLimitsWithBar(
 
   const parts = [fiveHourPart];
 
-  if (limits.weeklyPercent > 0) {
+  if (limits.weeklyPercent != null) {
     const weekly = Math.min(100, Math.max(0, Math.round(limits.weeklyPercent)));
     const weeklyColor = getColor(weekly);
     const weeklyFilled = Math.round((weekly / 100) * barWidth);

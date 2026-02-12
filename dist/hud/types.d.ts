@@ -113,8 +113,8 @@ export interface PrdStateForHud {
 export interface RateLimits {
     /** 5-hour rolling window usage percentage (0-100) - all models combined */
     fiveHourPercent: number;
-    /** Weekly usage percentage (0-100) - all models combined */
-    weeklyPercent: number;
+    /** Weekly usage percentage (0-100) - all models combined (undefined if not applicable) */
+    weeklyPercent?: number;
     /** When the 5-hour limit resets (null if unavailable) */
     fiveHourResetsAt?: Date | null;
     /** When the weekly limit resets (null if unavailable) */

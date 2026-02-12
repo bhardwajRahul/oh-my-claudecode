@@ -69,6 +69,19 @@ interface ZaiQuotaResponse {
 }
 
 /**
+ * Check if a URL points to z.ai (exact hostname match)
+ */
+export function isZaiHost(urlString: string): boolean {
+  try {
+    const url = new URL(urlString);
+    const hostname = url.hostname.toLowerCase();
+    return hostname === 'z.ai' || hostname.endsWith('.z.ai');
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Get the cache file path
  */
 function getCachePath(): string {
@@ -514,7 +527,7 @@ function parseUsageResponse(response: UsageApiResponse): RateLimits | null {
 /**
  * Parse z.ai API response into RateLimits
  */
-function parseZaiResponse(response: ZaiQuotaResponse): RateLimits | null {
+export function parseZaiResponse(response: ZaiQuotaResponse): RateLimits | null {
   const limits = response.data?.limits;
   if (!limits || limits.length === 0) return null;
 
@@ -537,8 +550,7 @@ function parseZaiResponse(response: ZaiQuotaResponse): RateLimits | null {
   return {
     fiveHourPercent: clamp(tokensLimit?.percentage),
     fiveHourResetsAt: parseResetTime(tokensLimit?.nextResetTime),
-    weeklyPercent: 0,
-    weeklyResetsAt: null,
+    // z.ai has no weekly quota; leave weeklyPercent undefined so HUD hides it
     monthlyPercent: timeLimit ? clamp(timeLimit.percentage) : undefined,
     monthlyResetsAt: timeLimit ? (parseResetTime(timeLimit.nextResetTime) ?? null) : undefined,
   };
@@ -559,7 +571,24 @@ export async function getUsage(): Promise<RateLimits | null> {
     return cache.data;
   }
 
-  // Primary path: OAuth credentials (official Claude Code support)
+  // z.ai path (must precede OAuth check to avoid stale Anthropic credentials)
+  const baseUrl = process.env.ANTHROPIC_BASE_URL;
+  const authToken = process.env.ANTHROPIC_AUTH_TOKEN;
+  const isZai = baseUrl != null && isZaiHost(baseUrl);
+
+  if (isZai && authToken) {
+    const response = await fetchUsageFromZai();
+    if (!response) {
+      writeCache(null, true);
+      return null;
+    }
+
+    const usage = parseZaiResponse(response);
+    writeCache(usage, !usage);
+    return usage;
+  }
+
+  // Anthropic OAuth path (official Claude Code support)
   let creds = getCredentials();
   if (creds) {
     // If credentials are expired, attempt token refresh
@@ -572,11 +601,11 @@ export async function getUsage(): Promise<RateLimits | null> {
           // Persist refreshed credentials back to store
           writeBackCredentials(creds);
         } else {
-          // Refresh failed - continue to fallback path
+          // Refresh failed - no credentials available
           creds = null;
         }
       } else {
-        // No refresh token available - continue to fallback path
+        // No refresh token available
         creds = null;
       }
     }
@@ -593,22 +622,6 @@ export async function getUsage(): Promise<RateLimits | null> {
       writeCache(usage, !usage);
       return usage;
     }
-  }
-
-  // Fallback path: z.ai API when explicitly using z.ai (graceful degradation)
-  // Only activate when ANTHROPIC_BASE_URL contains 'z.ai' to ensure user intent
-  const baseUrl = process.env.ANTHROPIC_BASE_URL;
-  const authToken = process.env.ANTHROPIC_AUTH_TOKEN;
-  if (baseUrl && authToken && baseUrl.includes('z.ai')) {
-    const response = await fetchUsageFromZai();
-    if (!response) {
-      writeCache(null, true);
-      return null;
-    }
-
-    const usage = parseZaiResponse(response);
-    writeCache(usage, !usage);
-    return usage;
   }
 
   // No credentials available
