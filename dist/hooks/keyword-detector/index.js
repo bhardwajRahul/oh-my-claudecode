@@ -76,14 +76,14 @@ export function removeCodeBlocks(text) {
  * Strips XML tags, URLs, file paths, and code blocks.
  */
 export function sanitizeForKeywordDetection(text) {
-    // Remove XML tag blocks (opening + content + closing)
-    let result = text.replace(/<[^>]+>[\s\S]*?<\/[^>]+>/g, '');
+    // Remove XML tag blocks (opening + content + closing; tag names must match)
+    let result = text.replace(/<(\w[\w-]*)[\s>][\s\S]*?<\/\1>/g, '');
     // Remove self-closing XML tags
-    result = result.replace(/<[^>]+\/\s*>/g, '');
+    result = result.replace(/<\w[\w-]*(?:\s[^>]*)?\s*\/>/g, '');
     // Remove URLs
     result = result.replace(/https?:\/\/\S+/g, '');
-    // Remove file paths (path/to/file.ext patterns)
-    result = result.replace(/\S*\/\S+\.\w+/g, '');
+    // Remove file paths — requires leading / or ./ or multi-segment dir/file.ext
+    result = result.replace(/(^|[\s"'`(])(?:\.?\/(?:[\w.-]+\/)*[\w.-]+|(?:[\w.-]+\/)+[\w.-]+\.\w+)/gm, '$1');
     // Remove code blocks (fenced and inline)
     result = removeCodeBlocks(result);
     return result;
@@ -142,13 +142,19 @@ export function detectKeywordsWithType(text, _agentName) {
         const pattern = KEYWORD_PATTERNS[type];
         const match = cleanedText.match(pattern);
         if (match && match.index !== undefined) {
-            // Map legacy ultrapilot/swarm to team
-            const mappedType = (type === 'ultrapilot' || type === 'swarm') ? 'team' : type;
             detected.push({
-                type: mappedType,
+                type,
                 keyword: match[0],
                 position: match.index
             });
+            // Legacy ultrapilot/swarm also activate team mode internally
+            if (type === 'ultrapilot' || type === 'swarm') {
+                detected.push({
+                    type: 'team',
+                    keyword: match[0],
+                    position: match.index
+                });
+            }
         }
     }
     return detected;
