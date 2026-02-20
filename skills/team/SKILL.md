@@ -1,11 +1,14 @@
 ---
 name: team
 description: N coordinated agents on shared task list using Claude Code native teams
+aliases: [swarm]
 ---
 
 # Team Skill
 
 Spawn N coordinated agents working on a shared task list using Claude Code's native team tools. Replaces the legacy `/swarm` skill (SQLite-based) with built-in team management, inter-agent messaging, and task dependencies -- no external dependencies required.
+
+`swarm` is the compatibility alias for this canonical skill entrypoint.
 
 ## Usage
 
@@ -137,10 +140,47 @@ Continue `team-exec -> team-verify -> team-fix` until:
 
 `team-fix` is bounded by max attempts. If fix attempts exceed the configured limit, transition to terminal `failed` (no infinite loop).
 
+### Stage Handoff Convention
+
+When transitioning between stages, important context — decisions made, alternatives rejected, risks identified — lives only in the lead's conversation history. If the lead's context compacts or agents restart, this knowledge is lost.
+
+**Each completing stage MUST produce a handoff document before transitioning.**
+
+The lead writes handoffs to `.omc/handoffs/<stage-name>.md`.
+
+#### Handoff Format
+
+```markdown
+## Handoff: <current-stage> → <next-stage>
+- **Decided**: [key decisions made in this stage]
+- **Rejected**: [alternatives considered and why they were rejected]
+- **Risks**: [identified risks for the next stage]
+- **Files**: [key files created or modified]
+- **Remaining**: [items left for the next stage to handle]
+```
+
+#### Handoff Rules
+
+1. **Lead reads previous handoff BEFORE spawning next stage's agents.** The handoff content is included in the next stage's agent spawn prompts, ensuring agents start with full context.
+2. **Handoffs accumulate.** The verify stage can read all prior handoffs (plan → prd → exec) for full decision history.
+3. **On team cancellation, handoffs survive** in `.omc/handoffs/` for session resume. They are not deleted by `TeamDelete`.
+4. **Handoffs are lightweight.** 10-20 lines max. They capture decisions and rationale, not full specifications (those live in deliverable files like DESIGN.md).
+
+#### Example
+
+```markdown
+## Handoff: team-plan → team-exec
+- **Decided**: Microservice architecture with 3 services (auth, api, worker). PostgreSQL for persistence. JWT for auth tokens.
+- **Rejected**: Monolith (scaling concerns), MongoDB (team expertise is SQL), session cookies (API-first design).
+- **Risks**: Worker service needs Redis for job queue — not yet provisioned. Auth service has no rate limiting in initial design.
+- **Files**: DESIGN.md, TEST_STRATEGY.md
+- **Remaining**: Database migration scripts, CI/CD pipeline config, Redis provisioning.
+```
+
 ### Resume and Cancel Semantics
 
-- **Resume:** restart from the last non-terminal stage using staged state + live task status.
-- **Cancel:** `/oh-my-claudecode:cancel` requests teammate shutdown, waits for responses (best effort), marks phase `cancelled` with `active=false`, captures cancellation metadata, then deletes team resources and clears/preserves Team state per policy.
+- **Resume:** restart from the last non-terminal stage using staged state + live task status. Read `.omc/handoffs/` to recover stage transition context.
+- **Cancel:** `/oh-my-claudecode:cancel` requests teammate shutdown, waits for responses (best effort), marks phase `cancelled` with `active=false`, captures cancellation metadata, then deletes team resources and clears/preserves Team state per policy. Handoff files in `.omc/handoffs/` are preserved for potential resume.
 - Terminal states are `complete`, `failed`, and `cancelled`.
 
 ## Workflow
@@ -468,7 +508,16 @@ Do NOT mark the task as completed. Leave it in_progress so the lead can reassign
 }
 ```
 
-### Shutdown Protocol
+### Shutdown Protocol (BLOCKING)
+
+**CRITICAL: Steps must execute in exact order. Never call TeamDelete before shutdown is confirmed.**
+
+**Step 1: Verify completion**
+```
+Call TaskList — verify all real tasks (non-internal) are completed or failed.
+```
+
+**Step 2: Request shutdown from each teammate**
 
 **Lead sends:**
 ```json
@@ -478,6 +527,11 @@ Do NOT mark the task as completed. Leave it in_progress so the lead can reassign
   "content": "All work complete, shutting down team"
 }
 ```
+
+**Step 3: Wait for responses (BLOCKING)**
+- Wait up to 30s per teammate for `shutdown_response`
+- Track which teammates confirmed vs timed out
+- If a teammate doesn't respond within 30s: log warning, mark as unresponsive
 
 **Teammate receives and responds:**
 ```json
@@ -492,6 +546,24 @@ After approval:
 - Teammate process terminates
 - Teammate auto-removed from `config.json` members array
 - Internal task for that teammate completes
+
+**Step 4: TeamDelete — only after ALL teammates confirmed or timed out**
+```json
+{ "team_name": "fix-ts-errors" }
+```
+
+**Step 5: Orphan scan**
+
+Check for agent processes that survived TeamDelete:
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-orphans.mjs" --team-name fix-ts-errors
+```
+
+This scans for processes matching the team name whose config no longer exists, and terminates them (SIGTERM → 5s wait → SIGKILL). Supports `--dry-run` for inspection.
+
+**Shutdown sequence is BLOCKING:** Do not proceed to TeamDelete until all teammates have either:
+- Confirmed shutdown (`shutdown_response` with `approve: true`), OR
+- Timed out (30s with no response)
 
 **IMPORTANT:** The `request_id` is provided in the shutdown request message that the teammate receives. The teammate must extract it and pass it back. Do NOT fabricate request IDs.
 

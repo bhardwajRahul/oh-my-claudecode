@@ -26,7 +26,7 @@
 
 **第二步：配置**
 ```bash
-/omc:omc-setup
+/omc-setup
 ```
 
 **第三步：开始构建**
@@ -45,7 +45,7 @@ autopilot: build a REST API for managing tasks
 /plugin marketplace update omc
 
 # 2. 重新运行设置以刷新配置
-/omc:omc-setup
+/omc-setup
 ```
 
 > **注意：** 如果 marketplace 自动更新未启用，您需要在运行设置之前手动执行 `/plugin marketplace update omc` 来同步最新版本。
@@ -53,7 +53,7 @@ autopilot: build a REST API for managing tasks
 如果更新后遇到问题，清除旧的插件缓存：
 
 ```bash
-/omc:omc-doctor
+/omc-doctor
 ```
 
 <h1 align="center">你的 Claude 已被注入超能力。</h1>
@@ -137,7 +137,7 @@ omc wait --stop   # 禁用守护进程
 
 **需要：** tmux（用于会话检测）
 
-### 通知标签配置 (Telegram/Discord)
+### 通知标签配置 (Telegram/Discord/Slack)
 
 你可以配置 stop 回调发送会话摘要时要 @ 谁。
 
@@ -145,6 +145,7 @@ omc wait --stop   # 禁用守护进程
 # 设置/替换标签列表
 omc config-stop-callback telegram --enable --token <bot_token> --chat <chat_id> --tag-list "@alice,bob"
 omc config-stop-callback discord --enable --webhook <url> --tag-list "@here,123456789012345678,role:987654321098765432"
+omc config-stop-callback slack --enable --webhook <url> --tag-list "<!here>,<@U1234567890>"
 
 # 增量更新
 omc config-stop-callback telegram --add-tag charlie
@@ -155,6 +156,7 @@ omc config-stop-callback discord --clear-tags
 标签规则：
 - Telegram：`alice` 会规范化为 `@alice`
 - Discord：支持 `@here`、`@everyone`、纯数字用户 ID、`role:<id>`
+- Slack：支持 `<@MEMBER_ID>`、`<!channel>`、`<!here>`、`<!everyone>`、`<!subteam^GROUP_ID>`
 - `file` 回调会忽略标签选项
 
 ---
@@ -181,9 +183,12 @@ export OMC_DISCORD_NOTIFIER_CHANNEL="your_channel_id"
 export OMC_TELEGRAM_BOT_TOKEN="your_bot_token"
 export OMC_TELEGRAM_CHAT_ID="your_chat_id"
 
+# Slack
+export OMC_SLACK_WEBHOOK_URL="your_webhook_url"
+export OMC_SLACK_MENTION="<@U1234567890>"  # optional
+
 # 可选 webhook
 export OMC_DISCORD_WEBHOOK_URL="your_webhook_url"
-export OMC_SLACK_WEBHOOK_URL="your_webhook_url"
 ```
 
 > 注意：请确保在运行 `claude` 的同一个 Shell 中已加载这些环境变量。

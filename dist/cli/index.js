@@ -88,16 +88,17 @@ async function displayAnalyticsBanner() {
         console.log('');
     }
 }
-// Default action when running 'omc' with no args
-// Check env var to decide between dashboard and launch
+// Default action when running 'omc' with no subcommand
+// Forwards all args to launchCommand so 'omc --notify false --madmax' etc. work directly
 async function defaultAction() {
     const defaultActionMode = process.env.OMC_DEFAULT_ACTION || 'launch';
     if (defaultActionMode === 'dashboard') {
         await displayAnalyticsDashboard();
     }
     else {
-        // Launch Claude Code by default
-        await launchCommand([]);
+        // Pass all CLI args through to launch (strip node + script path)
+        const args = process.argv.slice(2);
+        await launchCommand(args);
     }
 }
 // Analytics dashboard - moved from defaultAction
@@ -136,6 +137,7 @@ program
     .name('omc')
     .description('Multi-agent orchestration system for Claude Agent SDK with analytics')
     .version(version)
+    .allowUnknownOption()
     .action(defaultAction);
 /**
  * Launch command - Native tmux shell launch for Claude Code
@@ -146,12 +148,21 @@ program
     .allowUnknownOption()
     .addHelpText('after', `
 Examples:
-  $ omc launch                   Launch Claude Code
-  $ omc launch --madmax          Launch with permissions bypass
-  $ omc launch --yolo            Launch with permissions bypass (alias)
+  $ omc                                Launch Claude Code
+  $ omc --madmax                       Launch with permissions bypass
+  $ omc --yolo                         Launch with permissions bypass (alias)
+  $ omc --notify false                 Launch without CCNotifier events
+  $ omc launch                         Explicit launch subcommand (same as bare omc)
+  $ omc launch --madmax                Explicit launch with flags
+
+Options:
+  --notify <bool>   Enable/disable CCNotifier events. false sets OMC_NOTIFY=0
+                    and suppresses all stop/session-start/session-idle notifications.
+                    Default: true
 
 Environment:
-  Set OMC_DEFAULT_ACTION=dashboard to show analytics dashboard when running 'omc' with no args`)
+  OMC_NOTIFY=0              Suppress all notifications (set by --notify false)
+  OMC_DEFAULT_ACTION=dashboard  Show analytics dashboard when running 'omc' with no args`)
     .action(async (args) => {
     await launchCommand(args);
 });
@@ -545,7 +556,7 @@ Examples:
  */
 const configStopCallback = program
     .command('config-stop-callback <type>')
-    .description('Configure stop hook callbacks (file/telegram/discord)')
+    .description('Configure stop hook callbacks (file/telegram/discord/slack)')
     .option('--enable', 'Enable callback')
     .option('--disable', 'Disable callback')
     .option('--path <path>', 'File path (supports {session_id}, {date}, {time})')
@@ -565,6 +576,7 @@ Types:
   file       File system callback (saves session summary to disk)
   telegram   Telegram bot notification
   discord    Discord webhook notification
+  slack      Slack incoming webhook notification
 
 Profile types (use with --profile):
   discord-bot  Discord Bot API (token + channel ID)
@@ -716,7 +728,7 @@ Examples:
         return;
     }
     // Legacy (non-profile) path
-    const validTypes = ['file', 'telegram', 'discord'];
+    const validTypes = ['file', 'telegram', 'discord', 'slack'];
     if (!validTypes.includes(type)) {
         console.error(chalk.red(`Invalid callback type: ${type}`));
         console.error(chalk.gray(`Valid types: ${validTypes.join(', ')}`));
@@ -810,6 +822,20 @@ Examples:
                 process.exit(1);
             }
             config.stopHookCallbacks.discord = {
+                ...current,
+                enabled: enabled ?? current?.enabled ?? false,
+                webhookUrl: options.webhook ?? current?.webhookUrl,
+                tagList: hasTagListChanges ? resolveTagList(current?.tagList) : current?.tagList,
+            };
+            break;
+        }
+        case 'slack': {
+            const current = config.stopHookCallbacks.slack;
+            if (enabled === true && (!options.webhook && !current?.webhookUrl)) {
+                console.error(chalk.red('Slack requires --webhook <webhook_url>'));
+                process.exit(1);
+            }
+            config.stopHookCallbacks.slack = {
                 ...current,
                 enabled: enabled ?? current?.enabled ?? false,
                 webhookUrl: options.webhook ?? current?.webhookUrl,

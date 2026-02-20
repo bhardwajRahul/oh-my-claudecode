@@ -65,6 +65,16 @@
             "timeout": 3
           }
         ]
+      },
+      {
+        "matcher": "TeamCreate|ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/context-safety.mjs\"",
+            "timeout": 3
+          }
+        ]
       }
     ],
     "PermissionRequest": [
@@ -96,6 +106,18 @@
         ]
       }
     ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/post-tool-use-failure.mjs\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
     "SubagentStart": [
       {
         "matcher": "*",
@@ -115,6 +137,11 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/subagent-tracker.mjs\" stop",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/verify-deliverables.mjs\"",
             "timeout": 5
           }
         ]
@@ -143,7 +170,17 @@
         "hooks": [
           {
             "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/context-guard-stop.mjs\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/persistent-mode.cjs\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/code-simplifier.mjs\"",
             "timeout": 5
           }
         ]

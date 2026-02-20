@@ -25,7 +25,7 @@ if (!existsSync(HUD_DIR)) {
 }
 
 // 2. Create HUD wrapper script
-const hudScriptPath = join(HUD_DIR, 'omc-hud.mjs');
+const hudScriptPath = join(HUD_DIR, 'omc-hud.mjs').replace(/\\/g, '/');
 const hudScript = `#!/usr/bin/env node
 /**
  * OMC HUD - Statusline Script
@@ -119,7 +119,7 @@ try {
   // Update statusLine to use new HUD path
   settings.statusLine = {
     type: 'command',
-    command: `node ${hudScriptPath}`
+    command: `node ${hudScriptPath.replace(/\\/g, "/")}`
   };
   writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
   console.log('[OMC] Configured HUD statusLine in settings.json');

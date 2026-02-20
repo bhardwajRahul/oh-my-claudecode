@@ -572,6 +572,22 @@ function processPreToolUse(input) {
     if (input.toolName === "AskUserQuestion" && input.sessionId) {
         _notify.askUserQuestion(input.sessionId, directory, input.toolInput);
     }
+    // Notify when a new agent is spawned via Task tool (issue #761)
+    // Fire-and-forget: verbosity filtering is handled inside notify()
+    if (input.toolName === "Task" && input.sessionId) {
+        const taskInput = input.toolInput;
+        const agentType = taskInput?.subagent_type;
+        const agentName = agentType?.includes(":")
+            ? agentType.split(":").pop()
+            : agentType;
+        import("../notifications/index.js").then(({ notify }) => notify("agent-call", {
+            sessionId: input.sessionId,
+            projectPath: directory,
+            agentName,
+            agentType,
+            profileName: process.env.OMC_NOTIFY_PROFILE,
+        }).catch(() => { })).catch(() => { });
+    }
     // Warn about pkill -f self-termination risk (issue #210)
     // Matches: pkill -f, pkill -9 -f, pkill --full, etc.
     if (input.toolName === "Bash") {
@@ -866,6 +882,16 @@ export async function processHook(hookType, rawInput) {
                 }
                 const { handlePermissionRequest } = await import("./permission-handler/index.js");
                 return await handlePermissionRequest(input);
+            }
+            case "code-simplifier": {
+                const directory = input.directory ?? process.cwd();
+                const stateDir = join(resolveToWorktreeRoot(directory), ".omc", "state");
+                const { processCodeSimplifier } = await import("./code-simplifier/index.js");
+                const result = processCodeSimplifier(directory, stateDir);
+                if (result.shouldBlock) {
+                    return { continue: false, message: result.message };
+                }
+                return { continue: true };
             }
             default:
                 return { continue: true };

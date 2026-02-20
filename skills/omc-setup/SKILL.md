@@ -563,7 +563,6 @@ Use the AskUserQuestion tool to prompt the user:
 
 **Options:**
 1. **ultrawork (maximum capability)** - Uses all agent tiers including Opus for complex tasks. Best for challenging work where quality matters most. (Recommended)
-2. ** (token efficient)** - Prefers Haiku/Sonnet agents, avoids Opus. Best for pro-plan users who want cost efficiency.
 
 Store the preference in `~/.claude/.omc-config.json`:
 
@@ -584,6 +583,7 @@ echo "Default execution mode set to: USER_CHOICE"
 ```
 
 **Note**: This preference ONLY affects generic keywords ("fast", "parallel"). Explicit keywords ("ulw") always override this preference.
+
 
 ## Step 3.8: Install CLI Analytics Tools (Optional)
 
@@ -914,7 +914,6 @@ Just include these words naturally in your request:
 | ralph | Persistence mode | "ralph: fix the auth bug" |
 | ralplan | Iterative planning | "ralplan this feature" |
 | ulw | Max parallelism | "ulw refactor the API" |
-| eco | Token-efficient mode | "eco refactor the API" |
 | plan | Planning interview | "plan the new endpoints" |
 | team | Coordinated agents | "/team 3:executor fix errors" |
 
@@ -962,7 +961,6 @@ MAGIC KEYWORDS (power-user shortcuts):
 | ralph | /ralph | "ralph: fix the bug" |
 | ralplan | /ralplan | "ralplan this feature" |
 | ulw | /ultrawork | "ulw refactor API" |
-| eco | (new!) | "eco fix all errors" |
 | plan | /plan | "plan the endpoints" |
 | team | (new!) | "/team 3:executor fix errors" |
 
@@ -1116,3 +1114,24 @@ EXAMPLES:
 
 For more info: https://github.com/Yeachan-Heo/oh-my-claudecode
 ```
+
+## Optional Rule Templates
+
+OMC includes rule templates you can copy to your project's `.claude/rules/` directory for automatic context injection:
+
+| Template | Purpose |
+|----------|---------|
+| `coding-style.md` | Code style, immutability, file organization |
+| `testing.md` | TDD workflow, 80% coverage target |
+| `security.md` | Secret management, input validation |
+| `performance.md` | Model selection, context management |
+| `git-workflow.md` | Commit conventions, PR workflow |
+| `karpathy-guidelines.md` | Coding discipline — think before coding, simplicity, surgical changes |
+
+Copy with:
+```bash
+mkdir -p .claude/rules
+cp "${CLAUDE_PLUGIN_ROOT}/templates/rules/"*.md .claude/rules/
+```
+
+See `templates/rules/README.md` for details.

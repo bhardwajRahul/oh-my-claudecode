@@ -28,7 +28,7 @@ English | [한국어](README.ko.md) | [中文](README.zh.md) | [日本語](READM
 
 **Step 2: Setup**
 ```bash
-/omc:omc-setup
+/omc-setup
 ```
 
 **Step 3: Build something**
@@ -43,7 +43,7 @@ That's it. Everything else is automatic.
 Starting in **v4.1.7**, **Team** is the canonical orchestration surface in OMC. Legacy entrypoints like **swarm** and **ultrapilot** are still supported, but they now **route to Team under the hood**.
 
 ```bash
-/omc:team 3:executor "fix all TypeScript errors"
+/team 3:executor "fix all TypeScript errors"
 ```
 
 Team runs as a staged pipeline:
@@ -71,7 +71,7 @@ Enable Claude Code native teams in `~/.claude/settings.json`:
 /plugin marketplace update omc
 
 # 2. Re-run setup to refresh configuration
-/omc:omc-setup
+/omc-setup
 ```
 
 > **Note:** If marketplace auto-update is not enabled, you must manually run `/plugin marketplace update omc` to sync the latest version before running setup.
@@ -79,7 +79,7 @@ Enable Claude Code native teams in `~/.claude/settings.json`:
 If you experience issues after updating, clear the old plugin cache:
 
 ```bash
-/omc:omc-doctor
+/omc-doctor
 ```
 
 <h1 align="center">Your Claude Just Have been Steroided.</h1>
@@ -140,7 +140,7 @@ Optional shortcuts for power users. Natural language works fine without them.
 
 | Keyword | Effect | Example |
 |---------|--------|---------|
-| `team` | Canonical Team orchestration | `/omc:team 3:executor "fix all TypeScript errors"` |
+| `team` | Canonical Team orchestration | `/team 3:executor "fix all TypeScript errors"` |
 | `autopilot` | Full autonomous execution | `autopilot: build a todo app` |
 | `ralph` | Persistence mode | `ralph: refactor auth` |
 | `ulw` | Maximum parallelism | `ulw fix all errors` |
@@ -167,7 +167,7 @@ omc wait --stop   # Disable daemon
 
 **Requires:** tmux (for session detection)
 
-### Notification Tags (Telegram/Discord)
+### Notification Tags (Telegram/Discord/Slack)
 
 You can configure who gets tagged when stop callbacks send session summaries.
 
@@ -175,6 +175,7 @@ You can configure who gets tagged when stop callbacks send session summaries.
 # Set/replace tag list
 omc config-stop-callback telegram --enable --token <bot_token> --chat <chat_id> --tag-list "@alice,bob"
 omc config-stop-callback discord --enable --webhook <url> --tag-list "@here,123456789012345678,role:987654321098765432"
+omc config-stop-callback slack --enable --webhook <url> --tag-list "<!here>,<@U1234567890>"
 
 # Incremental updates
 omc config-stop-callback telegram --add-tag charlie
@@ -185,6 +186,7 @@ omc config-stop-callback discord --clear-tags
 Tag behavior:
 - Telegram: `alice` becomes `@alice`
 - Discord: supports `@here`, `@everyone`, numeric user IDs, and `role:<id>`
+- Slack: supports `<@MEMBER_ID>`, `<!channel>`, `<!here>`, `<!everyone>`, `<!subteam^GROUP_ID>`
 - `file` callbacks ignore tag options
 
 ---

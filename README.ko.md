@@ -26,7 +26,7 @@
 
 **Step 2: 설정**
 ```bash
-/omc:omc-setup
+/omc-setup
 ```
 
 **Step 3: 무언가 만들기**
@@ -45,7 +45,7 @@ autopilot: build a REST API for managing tasks
 /plugin marketplace update omc
 
 # 2. 셋업을 다시 실행하여 설정 갱신
-/omc:omc-setup
+/omc-setup
 ```
 
 > **참고:** 마켓플레이스 auto-update가 활성화되어 있지 않은 경우, 셋업 실행 전에 `/plugin marketplace update omc`를 수동으로 실행하여 최신 버전을 동기화해야 합니다.
@@ -53,7 +53,7 @@ autopilot: build a REST API for managing tasks
 업데이트 후 문제가 발생하면, 이전 플러그인 캐시를 정리하세요:
 
 ```bash
-/omc:omc-doctor
+/omc-doctor
 ```
 
 <h1 align="center">당신의 Claude가 스테로이드를 맞았습니다.</h1>
@@ -137,7 +137,7 @@ omc wait --stop   # 데몬 비활성화
 
 **요구사항:** tmux (세션 감지용)
 
-### 알림 태그 설정 (Telegram/Discord)
+### 알림 태그 설정 (Telegram/Discord/Slack)
 
 stop 콜백이 세션 요약을 보낼 때 태그할 대상을 설정할 수 있습니다.
 
@@ -145,6 +145,7 @@ stop 콜백이 세션 요약을 보낼 때 태그할 대상을 설정할 수 있
 # 태그 목록 설정/교체
 omc config-stop-callback telegram --enable --token <bot_token> --chat <chat_id> --tag-list "@alice,bob"
 omc config-stop-callback discord --enable --webhook <url> --tag-list "@here,123456789012345678,role:987654321098765432"
+omc config-stop-callback slack --enable --webhook <url> --tag-list "<!here>,<@U1234567890>"
 
 # 점진적 수정
 omc config-stop-callback telegram --add-tag charlie
@@ -155,6 +156,7 @@ omc config-stop-callback discord --clear-tags
 태그 동작:
 - Telegram: `alice`는 `@alice`로 정규화됩니다
 - Discord: `@here`, `@everyone`, 숫자 사용자 ID, `role:<id>` 지원
+- Slack: `<@MEMBER_ID>`, `<!channel>`, `<!here>`, `<!everyone>`, `<!subteam^GROUP_ID>` 지원
 - `file` 콜백은 태그 옵션을 무시합니다
 
 ---
@@ -181,9 +183,12 @@ export OMC_DISCORD_NOTIFIER_CHANNEL="your_channel_id"
 export OMC_TELEGRAM_BOT_TOKEN="your_bot_token"
 export OMC_TELEGRAM_CHAT_ID="your_chat_id"
 
+# Slack
+export OMC_SLACK_WEBHOOK_URL="your_webhook_url"
+export OMC_SLACK_MENTION="<@U1234567890>"  # optional
+
 # Optional webhooks
 export OMC_DISCORD_WEBHOOK_URL="your_webhook_url"
-export OMC_SLACK_WEBHOOK_URL="your_webhook_url"
 ```
 
 > 참고: `claude`를 실행하는 동일한 쉘에서 환경 변수가 로드되어 있어야 합니다.
