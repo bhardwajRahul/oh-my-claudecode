@@ -10,7 +10,7 @@
  */
 
 import { existsSync, readFileSync } from 'fs';
-import { join, extname, normalize, isAbsolute } from 'path';
+import { join, extname, normalize } from 'path';
 import { execSync } from 'child_process';
 
 // =============================================================================
@@ -22,12 +22,16 @@ import { execSync } from 'child_process';
  * Blocks shell metacharacters and path traversal attempts
  */
 export function isValidFilePath(filePath: string): boolean {
-  // Block shell metacharacters (sync with DANGEROUS_SHELL_CHARS but add \t)
-  if (/[;&|`$()<>{}[\]*?~!#\n\r\t\0\\]/.test(filePath)) return false;
+  // Normalize Windows path separators to forward slashes before checking.
+  // Backslashes are valid path separators on Windows (e.g. src\file.ts,
+  // C:\repo\file.ts) and must not be treated as shell metacharacters.
+  const normalized = filePath.replace(/\\/g, '/');
+
+  // Block shell metacharacters
+  if (/[;&|`$()<>{}[\]*?~!#\n\r\t\0]/.test(normalized)) return false;
 
   // Block path traversal
-  const normalized = normalize(filePath);
-  if (normalized.includes('..') || isAbsolute(normalized)) return false;
+  if (normalize(normalized).includes('..')) return false;
 
   return true;
 }
