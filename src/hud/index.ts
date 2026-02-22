@@ -154,7 +154,7 @@ async function recordTokenUsage(
  *
  * @returns Analytics fields or null if no token data available
  */
-async function getTokenTrackerFallback(
+async function _getTokenTrackerFallback(
   sessionId: string,
   durationMs: number,
 ): Promise<{
@@ -351,7 +351,7 @@ async function main(): Promise<void> {
 
     // Read HUD state for background tasks
     const hudState = readHudState(cwd);
-    const backgroundTasks = hudState?.backgroundTasks || [];
+    const _backgroundTasks = hudState?.backgroundTasks || [];
 
     // Persist session start time to survive tail-parsing resets (#528)
     // When tail parsing kicks in for large transcripts, sessionStart comes from
