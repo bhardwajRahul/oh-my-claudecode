@@ -9,7 +9,7 @@
  * Core bridge process that runs in a tmux session alongside a Codex/Gemini CLI.
  * Polls task files, builds prompts, spawns CLI processes, reports results.
  */
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import { existsSync, openSync, readSync, closeSync } from 'fs';
 import { join } from 'path';
 import { writeFileWithMode, ensureDirWithMode } from './fs-utils.js';
@@ -49,8 +49,7 @@ function sleep(ms) {
  * Uses `git status --porcelain` + `git ls-files --others --exclude-standard`.
  * Returns a Set of relative file paths that currently exist or are modified.
  */
-function captureFileSnapshot(cwd) {
-    const { execSync } = require('child_process');
+export function captureFileSnapshot(cwd) {
     const files = new Set();
     try {
         // Get all tracked files that are modified, added, or staged
@@ -306,7 +305,7 @@ function spawnCliProcess(provider, prompt, model, cwd, timeoutMs) {
     let cmd;
     if (provider === 'codex') {
         cmd = 'codex';
-        args = ['exec', '-m', model || 'gpt-5.3-codex', '--json', '--full-auto'];
+        args = ['exec', '-m', model || 'gpt-5.3-codex', '--json', '--full-auto', '--skip-git-repo-check'];
     }
     else {
         cmd = 'gemini';

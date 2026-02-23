@@ -130,15 +130,15 @@ export function getInstalledVersion() {
         // Try to detect version from package.json if installed via npm
         try {
             // Check if we can find the package in node_modules
-            const result = execSync('npm list -g oh-my-claudecode --json', {
+            const result = execSync('npm list -g oh-my-claude-sisyphus --json', {
                 encoding: 'utf-8',
                 timeout: 5000,
                 stdio: 'pipe'
             });
             const data = JSON.parse(result);
-            if (data.dependencies?.['oh-my-claudecode']?.version) {
+            if (data.dependencies?.['oh-my-claude-sisyphus']?.version) {
                 return {
-                    version: data.dependencies['oh-my-claudecode'].version,
+                    version: data.dependencies['oh-my-claude-sisyphus'].version,
                     installedAt: new Date().toISOString(),
                     installMethod: 'npm'
                 };
@@ -338,7 +338,7 @@ export async function performUpdate(options) {
         const newVersion = release.tag_name.replace(/^v/, '');
         // Use npm for updates on all platforms (install.sh was removed)
         try {
-            execSync('npm install -g oh-my-claudecode@latest', {
+            execSync('npm install -g oh-my-claude-sisyphus@latest', {
                 encoding: 'utf-8',
                 stdio: options?.verbose ? 'inherit' : 'pipe',
                 timeout: 120000, // 2 minute timeout for npm
@@ -414,7 +414,7 @@ export async function performUpdate(options) {
         }
         catch (npmError) {
             throw new Error('Auto-update via npm failed. Please run manually:\n' +
-                '  npm install -g oh-my-claudecode@latest\n' +
+                '  npm install -g oh-my-claude-sisyphus@latest\n' +
                 'Or use: /plugin install oh-my-claudecode\n' +
                 `Error: ${npmError instanceof Error ? npmError.message : npmError}`);
         }

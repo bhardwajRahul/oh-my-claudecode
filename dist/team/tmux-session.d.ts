@@ -67,16 +67,22 @@ export declare function sendToWorker(sessionName: string, paneId: string, messag
  */
 export declare function injectToLeaderPane(sessionName: string, leaderPaneId: string, message: string): Promise<boolean>;
 /**
- * Wait for a worker to write its ready sentinel file.
- * Polls .omc/state/team/{teamName}/workers/{workerName}/.ready
- * Default timeout: 30s
- */
-export declare function waitForWorkerReady(teamName: string, workerName: string, cwd: string, timeoutMs?: number): Promise<boolean>;
-/**
  * Check if a worker pane is still alive.
  * Uses pane ID for stable targeting (not pane index).
  */
 export declare function isWorkerAlive(paneId: string): Promise<boolean>;
+/**
+ * Graceful-then-force kill of worker panes.
+ * Writes a shutdown sentinel, waits up to graceMs, then force-kills remaining panes.
+ * Never kills the leader pane.
+ */
+export declare function killWorkerPanes(opts: {
+    paneIds: string[];
+    leaderPaneId?: string;
+    teamName: string;
+    cwd: string;
+    graceMs?: number;
+}): Promise<void>;
 /**
  * Kill the team tmux session or just the worker panes (split-pane mode).
  *
@@ -87,9 +93,4 @@ export declare function isWorkerAlive(paneId: string): Promise<boolean>;
  * When sessionName does not contain ':', the entire session is killed.
  */
 export declare function killTeamSession(sessionName: string, workerPaneIds?: string[], leaderPaneId?: string): Promise<void>;
-/**
- * Respawn a worker in a new pane (when old pane died).
- * Returns the new pane ID.
- */
-export declare function respawnWorkerInPane(sessionName: string, config: WorkerPaneConfig): Promise<string>;
 //# sourceMappingURL=tmux-session.d.ts.map

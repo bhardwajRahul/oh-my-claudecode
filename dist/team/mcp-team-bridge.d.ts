@@ -1,5 +1,11 @@
 import type { BridgeConfig } from './types.js';
 /**
+ * Capture a snapshot of tracked/modified/untracked files in the working directory.
+ * Uses `git status --porcelain` + `git ls-files --others --exclude-standard`.
+ * Returns a Set of relative file paths that currently exist or are modified.
+ */
+export declare function captureFileSnapshot(cwd: string): Set<string>;
+/**
  * Sanitize user-controlled content to prevent prompt injection.
  * - Truncates to maxLength
  * - Escapes XML-like delimiter tags that could confuse the prompt structure

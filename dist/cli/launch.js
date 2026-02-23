@@ -87,7 +87,7 @@ export function runClaude(cwd, args, sessionId) {
     const policy = resolveLaunchPolicy(process.env);
     // Check if omc has a HUD command
     // For now, use a simple placeholder or skip HUD if not available
-    const hasHudCommand = false; // TODO: Check if omc has hud command
+    const hasHudCommand = true;
     const hudCmd = hasHudCommand ? buildTmuxShellCommand('node', [omcBin, 'hud', '--watch']) : '';
     switch (policy) {
         case 'inside-tmux':
@@ -132,7 +132,8 @@ function runClaudeInsideTmux(cwd, args, hudCmd) {
             console.error('[omc] Error: claude CLI not found in PATH.');
             process.exit(1);
         }
-        // Normal exit (non-zero status codes throw in execFileSync) — ignore
+        // Propagate Claude's exit code so omc does not swallow failures
+        process.exit(typeof err.status === 'number' ? err.status : 1);
     }
     finally {
         // Cleanup HUD pane on exit
@@ -156,6 +157,7 @@ function runClaudeOutsideTmux(cwd, args, _sessionId, hudCmd) {
     const tmuxArgs = [
         'new-session', '-d', '-s', sessionName, '-c', cwd,
         claudeCmd,
+        ';', 'set-option', '-g', 'mouse', 'on',
     ];
     // Add HUD pane if available
     if (hudCmd) {
@@ -185,7 +187,8 @@ function runClaudeDirect(cwd, args) {
             console.error('[omc] Error: claude CLI not found in PATH.');
             process.exit(1);
         }
-        // Normal exit (non-zero status codes throw in execFileSync) — ignore
+        // Propagate Claude's exit code so omc does not swallow failures
+        process.exit(typeof err.status === 'number' ? err.status : 1);
     }
 }
 /**

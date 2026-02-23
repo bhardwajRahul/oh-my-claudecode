@@ -6,6 +6,7 @@
  * Bundled as CJS via esbuild (scripts/build-runtime-cli.mjs).
  */
 import { readdirSync, readFileSync } from 'fs';
+import { writeFile, rename } from 'fs/promises';
 import { join } from 'path';
 import { startTeam, monitorTeam, shutdownTeam } from './runtime.js';
 function collectTaskResults(stateRoot) {
@@ -75,15 +76,18 @@ async function main() {
     let runtime = null;
     let finalStatus = 'timeout';
     let pollActive = true;
+    function exitCodeFor(status) {
+        return status === 'completed' ? 0 : status === 'timeout' ? 2 : 1;
+    }
     async function doShutdown(status) {
         pollActive = false;
         finalStatus = status;
-        // 1. Collect task results before shutdown destroys state
-        const taskResults = collectTaskResults(stateRoot);
-        // 2. Stop watchdog if running
+        // 1. Stop watchdog first — prevents late tick from racing with result collection
         if (runtime?.stopWatchdog) {
             runtime.stopWatchdog();
         }
+        // 2. Collect task results (watchdog is now stopped, no more writes to tasks/)
+        const taskResults = collectTaskResults(stateRoot);
         // 3. Shutdown team with 2s timeout (non-Claude workers never write shutdown-ack.json)
         if (runtime) {
             try {
@@ -104,7 +108,7 @@ async function main() {
         // 4. Write result to stdout
         process.stdout.write(JSON.stringify(output) + '\n');
         // 5. Exit
-        process.exit(0);
+        process.exit(exitCodeFor(status));
     }
     // Register signal handlers before poll loop
     process.on('SIGINT', () => {
@@ -122,6 +126,19 @@ async function main() {
     catch (err) {
         process.stderr.write(`[runtime-cli] startTeam failed: ${err}\n`);
         process.exit(1);
+    }
+    // Persist pane IDs to disk so MCP server can clean up after timeout (Step 1)
+    const jobId = process.env.OMC_JOB_ID;
+    const omcJobsDir = process.env.OMC_JOBS_DIR;
+    if (jobId && omcJobsDir) {
+        try {
+            const panesPath = join(omcJobsDir, `${jobId}-panes.json`);
+            await writeFile(panesPath + '.tmp', JSON.stringify({ paneIds: runtime.workerPaneIds, leaderPaneId: runtime.leaderPaneId }));
+            await rename(panesPath + '.tmp', panesPath);
+        }
+        catch (err) {
+            process.stderr.write(`[runtime-cli] Failed to persist pane IDs: ${err}\n`);
+        }
     }
     // Poll loop
     const deadline = Date.now() + timeoutMs;

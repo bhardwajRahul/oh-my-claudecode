@@ -54,11 +54,10 @@ export declare function startTeam(config: TeamConfig): Promise<TeamRuntime>;
  */
 export declare function monitorTeam(teamName: string, cwd: string, workerPaneIds: string[]): Promise<TeamSnapshot>;
 /**
- * Poll for CLI worker completion via done.json sentinel files.
- * Skips Claude workers (they use the sentinel/.ready protocol).
+ * Poll for all worker done.json sentinel files (claude, codex, gemini).
  * Returns a stop function that clears the interval.
  */
-export declare function watchdogCliWorkers(teamName: string, workerNames: string[], agentTypes: CliAgentType[], cwd: string, intervalMs: number, onComplete: (event: WatchdogCompletionEvent) => Promise<void> | void): () => void;
+export declare function watchdogCliWorkers(teamName: string, workerNames: string[], cwd: string, intervalMs: number, onComplete: (event: WatchdogCompletionEvent) => Promise<void> | void): () => void;
 /**
  * Assign a task to a specific worker via inbox + tmux trigger.
  */

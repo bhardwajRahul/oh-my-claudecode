@@ -230,6 +230,14 @@ async function processKeywordDetector(input) {
             case "tdd":
                 messages.push(`[MODE: ${keywordType.toUpperCase()}] Skill invocation handled by UserPromptSubmit hook.`);
                 break;
+            case "codex":
+            case "gemini": {
+                messages.push(`[MAGIC KEYWORD: omc-teams]\n` +
+                    `User intent: delegate to ${keywordType} CLI workers via omc-teams.\n` +
+                    `Agent type: ${keywordType}. Parse N from user message (default 1).\n` +
+                    `Invoke: /omc-teams N:${keywordType} "<task from user message>"`);
+                break;
+            }
             default:
                 // Skip unknown keywords
                 break;
@@ -846,7 +854,19 @@ export async function processHook(hookType, rawInput) {
                     return { continue: true };
                 }
                 const { handleSessionEnd } = await import("./session-end/index.js");
-                return await handleSessionEnd(input);
+                // De-normalize: SessionEndInput expects snake_case fields (session_id, cwd).
+                // normalizeHookInput mapped session_id→sessionId and cwd→directory, so we
+                // must reconstruct the snake_case shape before calling the handler.
+                const rawSE = input;
+                const sessionEndInput = {
+                    session_id: (rawSE.sessionId ?? rawSE.session_id),
+                    cwd: (rawSE.directory ?? rawSE.cwd),
+                    transcript_path: rawSE.transcript_path,
+                    permission_mode: (rawSE.permission_mode ?? "default"),
+                    hook_event_name: "SessionEnd",
+                    reason: rawSE.reason ?? "other",
+                };
+                return await handleSessionEnd(sessionEndInput);
             }
             case "subagent-start": {
                 if (!validateHookInput(input, requiredKeysForHook("subagent-start"), "subagent-start")) {
@@ -900,7 +920,18 @@ export async function processHook(hookType, rawInput) {
                     return { continue: true };
                 }
                 const { processPreCompact } = await import("./pre-compact/index.js");
-                return await processPreCompact(input);
+                // De-normalize: PreCompactInput expects snake_case fields (session_id, cwd).
+                const rawPC = input;
+                const preCompactInput = {
+                    session_id: (rawPC.sessionId ?? rawPC.session_id),
+                    cwd: (rawPC.directory ?? rawPC.cwd),
+                    transcript_path: rawPC.transcript_path,
+                    permission_mode: (rawPC.permission_mode ?? "default"),
+                    hook_event_name: "PreCompact",
+                    trigger: rawPC.trigger ?? "auto",
+                    custom_instructions: rawPC.custom_instructions,
+                };
+                return await processPreCompact(preCompactInput);
             }
             case "setup-init":
             case "setup-maintenance": {
@@ -908,18 +939,37 @@ export async function processHook(hookType, rawInput) {
                     return { continue: true };
                 }
                 const { processSetup } = await import("./setup/index.js");
-                return await processSetup({
-                    ...input,
-                    trigger: hookType === "setup-init" ? "init" : "maintenance",
+                // De-normalize: SetupInput expects snake_case fields (session_id, cwd).
+                const rawSetup = input;
+                const setupInput = {
+                    session_id: (rawSetup.sessionId ?? rawSetup.session_id),
+                    cwd: (rawSetup.directory ?? rawSetup.cwd),
+                    transcript_path: rawSetup.transcript_path,
+                    permission_mode: (rawSetup.permission_mode ?? "default"),
                     hook_event_name: "Setup",
-                });
+                    trigger: hookType === "setup-init" ? "init" : "maintenance",
+                };
+                return await processSetup(setupInput);
             }
             case "permission-request": {
                 if (!validateHookInput(input, requiredKeysForHook("permission-request"), "permission-request")) {
                     return { continue: true };
                 }
                 const { handlePermissionRequest } = await import("./permission-handler/index.js");
-                return await handlePermissionRequest(input);
+                // De-normalize: PermissionRequestInput expects snake_case fields
+                // (session_id, cwd, tool_name, tool_input).
+                const rawPR = input;
+                const permissionInput = {
+                    session_id: (rawPR.sessionId ?? rawPR.session_id),
+                    cwd: (rawPR.directory ?? rawPR.cwd),
+                    tool_name: (rawPR.toolName ?? rawPR.tool_name),
+                    tool_input: (rawPR.toolInput ?? rawPR.tool_input),
+                    transcript_path: rawPR.transcript_path,
+                    permission_mode: (rawPR.permission_mode ?? "default"),
+                    hook_event_name: "PermissionRequest",
+                    tool_use_id: rawPR.tool_use_id,
+                };
+                return await handlePermissionRequest(permissionInput);
             }
             case "code-simplifier": {
                 const directory = input.directory ?? process.cwd();

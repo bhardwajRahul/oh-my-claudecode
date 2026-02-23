@@ -6,6 +6,9 @@
  * Sessions are named "omc-team-{teamName}-{workerName}".
  */
 import { execSync, execFileSync } from 'child_process';
+import { join } from 'path';
+import fs from 'fs/promises';
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const TMUX_SESSION_PREFIX = 'omc-team';
 /** Validate tmux is available. Throws with install instructions if not. */
 export function validateTmux() {
@@ -303,29 +306,21 @@ export async function sendToWorker(sessionName, paneId, message) {
  */
 export async function injectToLeaderPane(sessionName, leaderPaneId, message) {
     const prefixed = `[OMC_TMUX_INJECT] ${message}`.slice(0, 200);
-    return sendToWorker(sessionName, leaderPaneId, prefixed);
-}
-/**
- * Wait for a worker to write its ready sentinel file.
- * Polls .omc/state/team/{teamName}/workers/{workerName}/.ready
- * Default timeout: 30s
- */
-export async function waitForWorkerReady(teamName, workerName, cwd, timeoutMs = 30_000) {
-    const { access } = await import('fs/promises');
-    const { join } = await import('path');
-    const sentinelPath = join(cwd, `.omc/state/team/${teamName}/workers/${workerName}/.ready`);
-    const pollInterval = 500;
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-        try {
-            await access(sentinelPath);
-            return true;
-        }
-        catch {
-            await new Promise(r => setTimeout(r, pollInterval));
+    // If the leader is running a blocking tool (e.g. omc_run_team_wait shows
+    // "esc to interrupt"), send C-c first so the message is not queued in the
+    // stdin buffer behind the blocked process.
+    try {
+        const { execFile } = await import('child_process');
+        const { promisify } = await import('util');
+        const execFileAsync = promisify(execFile);
+        const captured = await capturePaneAsync(leaderPaneId, execFileAsync);
+        if (paneHasActiveTask(captured)) {
+            await execFileAsync('tmux', ['send-keys', '-t', leaderPaneId, 'C-c']);
+            await new Promise(r => setTimeout(r, 250));
         }
     }
-    return false;
+    catch { /* best-effort */ }
+    return sendToWorker(sessionName, leaderPaneId, prefixed);
 }
 /**
  * Check if a worker pane is still alive.
@@ -346,6 +341,35 @@ export async function isWorkerAlive(paneId) {
     }
 }
 /**
+ * Graceful-then-force kill of worker panes.
+ * Writes a shutdown sentinel, waits up to graceMs, then force-kills remaining panes.
+ * Never kills the leader pane.
+ */
+export async function killWorkerPanes(opts) {
+    const { paneIds, leaderPaneId, teamName, cwd, graceMs = 10_000 } = opts;
+    if (!paneIds.length)
+        return; // guard: nothing to kill
+    // 1. Write graceful shutdown sentinel
+    const shutdownPath = join(cwd, '.omc', 'state', 'team', teamName, 'shutdown.json');
+    try {
+        await fs.writeFile(shutdownPath, JSON.stringify({ requestedAt: Date.now() }));
+        await sleep(graceMs);
+    }
+    catch { /* sentinel write failure is non-fatal */ }
+    // 2. Force-kill each worker pane, guarding leader
+    const { execFile } = await import('child_process');
+    const { promisify } = await import('util');
+    const execFileAsync = promisify(execFile);
+    for (const paneId of paneIds) {
+        if (paneId === leaderPaneId)
+            continue; // GUARD — never kill leader
+        try {
+            await execFileAsync('tmux', ['kill-pane', '-t', paneId]);
+        }
+        catch { /* pane already gone — OK */ }
+    }
+}
+/**
  * Kill the team tmux session or just the worker panes (split-pane mode).
  *
  * When sessionName contains ':' (split-pane mode, "session:window" form),
@@ -358,48 +382,26 @@ export async function killTeamSession(sessionName, workerPaneIds, leaderPaneId) 
     const { execFile } = await import('child_process');
     const { promisify } = await import('util');
     const execFileAsync = promisify(execFile);
-    if (sessionName.includes(':') && workerPaneIds && workerPaneIds.length > 0) {
-        // Split-pane mode: kill only worker panes, never the leader
-        for (const paneId of workerPaneIds) {
-            if (leaderPaneId && paneId === leaderPaneId)
+    if (sessionName.includes(':')) {
+        // Split-pane mode: kill ONLY worker panes, never kill-session
+        if (!workerPaneIds?.length)
+            return; // no-op guard
+        for (const id of workerPaneIds) {
+            if (id === leaderPaneId)
                 continue;
             try {
-                await execFileAsync('tmux', ['kill-pane', '-t', paneId]);
+                await execFileAsync('tmux', ['kill-pane', '-t', id]);
             }
-            catch {
-                // Pane may already be dead
-            }
+            catch { /* already gone */ }
         }
+        return;
     }
-    else {
-        try {
-            await execFileAsync('tmux', ['kill-session', '-t', sessionName]);
-        }
-        catch {
-            // Session may already be dead
-        }
+    // Session mode: this session is fully owned by the team
+    try {
+        await execFileAsync('tmux', ['kill-session', '-t', sessionName]);
     }
-}
-/**
- * Respawn a worker in a new pane (when old pane died).
- * Returns the new pane ID.
- */
-export async function respawnWorkerInPane(sessionName, config) {
-    const { execFile } = await import('child_process');
-    const { promisify } = await import('util');
-    const execFileAsync = promisify(execFile);
-    // Create new vertical split in the session
-    await execFileAsync('tmux', [
-        'split-window', '-v', '-t', sessionName, '-c', config.cwd
-    ]);
-    // Get the new pane ID
-    const allPanesResult = await execFileAsync('tmux', [
-        'list-panes', '-t', sessionName, '-F', '#{pane_id}'
-    ]);
-    const allPanes = allPanesResult.stdout.trim().split('\n').filter(Boolean);
-    const newPaneId = allPanes[allPanes.length - 1];
-    // Spawn worker in new pane
-    await spawnWorkerInPane(sessionName, newPaneId, config);
-    return newPaneId;
+    catch {
+        // Session may already be dead
+    }
 }
 //# sourceMappingURL=tmux-session.js.map

@@ -105,6 +105,9 @@ export interface OMCConfig {
     /** Whether to prompt for upgrade at session start when a new version is available (default: true).
      *  Set to false to show a passive notification instead of an interactive prompt. */
     autoUpgradePrompt?: boolean;
+    /** Absolute path to the Node.js binary detected at setup time.
+     *  Used by find-node.sh so hooks work for nvm/fnm users where node is not on PATH. */
+    nodeBinary?: string;
 }
 /**
  * Read the OMC configuration

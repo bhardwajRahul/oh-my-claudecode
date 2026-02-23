@@ -2,9 +2,8 @@ import { mkdir, writeFile, readFile, rm, appendFile } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { buildWorkerCommand, validateCliAvailable, getWorkerEnv as getModelWorkerEnv } from './model-contract.js';
-import { createTeamSession, spawnWorkerInPane, sendToWorker, waitForWorkerReady, isWorkerAlive, killTeamSession, injectToLeaderPane, } from './tmux-session.js';
+import { createTeamSession, spawnWorkerInPane, sendToWorker, isWorkerAlive, killTeamSession, injectToLeaderPane, } from './tmux-session.js';
 import { composeInitialInbox, ensureWorkerStateDir, writeWorkerOverlay, } from './worker-bootstrap.js';
-import { queueInboxInstruction } from './tmux-comm.js';
 function workerName(index) {
     return `worker-${index + 1}`;
 }
@@ -99,46 +98,31 @@ export async function startTeam(config) {
     await Promise.all(workerNames.map(async (wName, i) => {
         const agentType = agentTypes[i] ?? agentTypes[0] ?? 'claude';
         const paneId = session.workerPaneIds[i];
-        if (agentType === 'claude') {
-            // Claude workers write .ready sentinel after reading their AGENTS.md overlay
-            const ready = await waitForWorkerReady(teamName, wName, cwd, 30_000);
-            if (!ready)
-                console.warn(`[runtime] Claude worker ${wName} not ready within 30s`);
-            // Deliver full task via inbox file to avoid 200-char tmux limit
-            const task = tasks[i] ?? tasks[0];
-            if (task) {
-                const taskId = String(i + 1);
-                await queueInboxInstruction(teamName, wName, buildInitialTaskInstruction(teamName, wName, task, taskId), paneId, cwd);
-            }
+        // All agent types: wait for CLI startup, then deliver task via inbox file.
+        // Natural-language trigger works for claude, codex, and gemini.
+        await new Promise(r => setTimeout(r, 4000));
+        // Gemini shows a "Trust folder?" dialog before accepting input — send '1' to trust
+        if (agentType === 'gemini') {
+            await sendToWorker(session.sessionName, paneId, '1');
+            await new Promise(r => setTimeout(r, 800));
         }
-        else {
-            // Non-Claude workers (codex/gemini): wait for CLI startup, then send initial task via tmux
-            // These CLIs don't understand the sentinel protocol
-            await new Promise(r => setTimeout(r, 4000));
-            // Gemini shows a "Trust folder?" dialog before accepting input — send '1' to trust
-            if (agentType === 'gemini') {
-                await sendToWorker(session.sessionName, paneId, '1');
-                await new Promise(r => setTimeout(r, 800));
-            }
-            // Deliver full task via inbox file to avoid 200-char tmux limit.
-            // Non-Claude CLIs (codex/gemini) don't understand 'check-inbox' protocol,
-            // so we write to the inbox file and send a natural-language read trigger.
-            const task = tasks[i] ?? tasks[0];
-            if (task) {
-                const taskId = String(i + 1);
-                const instruction = buildInitialTaskInstruction(teamName, wName, task, taskId);
-                const inboxPath = join(cwd, `.omc/state/team/${teamName}/workers/${wName}/inbox.md`);
-                await appendFile(inboxPath, `\n\n---\n${instruction}\n_queued: ${new Date().toISOString()}_\n`, 'utf-8');
-                const relPath = `.omc/state/team/${teamName}/workers/${wName}/inbox.md`;
-                await sendToWorker(session.sessionName, paneId, `Read and execute your task from: ${relPath}`);
-            }
+        // Deliver full task via inbox file to avoid 200-char tmux limit.
+        // Write to inbox first, then send natural-language read trigger.
+        const task = tasks[i] ?? tasks[0];
+        if (task) {
+            const taskId = String(i + 1);
+            const instruction = buildInitialTaskInstruction(teamName, wName, task, taskId);
+            const inboxPath = join(cwd, `.omc/state/team/${teamName}/workers/${wName}/inbox.md`);
+            await appendFile(inboxPath, `\n\n---\n${instruction}\n_queued: ${new Date().toISOString()}_\n`, 'utf-8');
+            const relPath = `.omc/state/team/${teamName}/workers/${wName}/inbox.md`;
+            await sendToWorker(session.sessionName, paneId, `Read and execute your task from: ${relPath}`);
         }
     }));
-    // Start watchdog for non-Claude CLI workers
-    const hasCliWorkers = agentTypes.some(t => t !== 'claude');
+    // Start watchdog for all CLI workers — claude now writes done.json too
+    const hasCliWorkers = agentTypes.length > 0;
     let stopWatchdog;
     if (hasCliWorkers) {
-        stopWatchdog = watchdogCliWorkers(teamName, workerNames, agentTypes, cwd, 3000, async (event) => {
+        stopWatchdog = watchdogCliWorkers(teamName, workerNames, cwd, 3000, async (event) => {
             // Inject completion message into leader pane
             const msg = `[${event.workerName} ${event.status}] ${event.summary}`;
             const ok = await injectToLeaderPane(session.sessionName, session.leaderPaneId, msg);
@@ -216,8 +200,7 @@ export async function monitorTeam(teamName, cwd, workerPaneIds) {
         workers.push(status);
         if (!alive)
             deadWorkers.push(wName);
-        if (stalled)
-            console.warn(`[runtime] Worker ${wName} appears stalled (no heartbeat for 60s)`);
+        // Note: CLI workers (codex/gemini) may not write heartbeat.json — stall is advisory only
     }
     // Infer phase from task counts
     let phase = 'executing';
@@ -233,18 +216,14 @@ export async function monitorTeam(teamName, cwd, workerPaneIds) {
     return { teamName, phase, workers, taskCounts, deadWorkers };
 }
 /**
- * Poll for CLI worker completion via done.json sentinel files.
- * Skips Claude workers (they use the sentinel/.ready protocol).
+ * Poll for all worker done.json sentinel files (claude, codex, gemini).
  * Returns a stop function that clears the interval.
  */
-export function watchdogCliWorkers(teamName, workerNames, agentTypes, cwd, intervalMs, onComplete) {
+export function watchdogCliWorkers(teamName, workerNames, cwd, intervalMs, onComplete) {
     const processed = new Set();
     const tick = async () => {
         for (let i = 0; i < workerNames.length; i++) {
             const wName = workerNames[i];
-            const agentType = agentTypes[i] ?? agentTypes[0];
-            if (agentType === 'claude')
-                continue;
             if (processed.has(wName))
                 continue;
             const donePath = join(stateRoot(cwd, teamName), 'workers', wName, 'done.json');

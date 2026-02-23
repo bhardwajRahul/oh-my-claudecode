@@ -91,7 +91,7 @@ export {
 checkPersistentModes, createHookOutput } from './persistent-mode/index.js';
 export { 
 // Plugin Patterns (Popular Community Patterns)
-getFormatter, isFormatterAvailable, formatFile, getLinter, lintFile, validateCommitMessage, runTypeCheck, runTests, runPreCommitChecks, getPreCommitReminderMessage, getAutoFormatMessage } from './plugin-patterns/index.js';
+getFormatter, isFormatterAvailable, formatFile, getLinter, lintFile, validateCommitMessage, runTypeCheck, runTests, runLint, runPreCommitChecks, getPreCommitReminderMessage, getAutoFormatMessage } from './plugin-patterns/index.js';
 // Ralph Verifier is now exported from ./ralph/index.js above
 export { 
 // UltraQA Loop (QA cycling workflow)

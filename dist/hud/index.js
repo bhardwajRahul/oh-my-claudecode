@@ -21,6 +21,7 @@ import { compareVersions } from "../features/auto-update.js";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
+import { fileURLToPath } from "url";
 // Persistent token snapshot for delta calculations
 let previousSnapshot = null;
 /**
@@ -396,6 +397,10 @@ async function main() {
         }
     }
 }
-// Run main
-main();
+// Export for programmatic use (e.g., omc hud --watch loop)
+export { main };
+// Auto-run when executed directly
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+    main();
+}
 //# sourceMappingURL=index.js.map

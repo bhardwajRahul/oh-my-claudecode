@@ -1,3 +1,60 @@
+# oh-my-claudecode v4.4.0: tmux CLI Workers, Surgical Pane Cleanup & Security Hardening
+
+This release replaces the Codex/Gemini MCP server architecture with a tmux-based CLI worker runtime, hardens team session cleanup to never destroy the user's shell, and fixes several security issues in the team MCP surface.
+
+---
+
+### Breaking Changes
+
+**Codex/Gemini MCP servers removed**
+- `codexMcpServer`, `codexToolNames`, `geminiMcpServer`, `geminiToolNames` exports removed from `src/mcp/index.ts`.
+- The deleted files (`codex-core.ts`, `codex-server.ts`, `codex-standalone-server.ts`, `gemini-core.ts`, `gemini-server.ts`, `gemini-standalone-server.ts`) are no longer bundled.
+- **Migration**: use `/omc-teams N:codex "task"` or `/omc-teams N:gemini "task"` to run Codex/Gemini CLI workers in tmux panes. Keyword detection for "ask codex" / "use gemini" now automatically routes to `/omc-teams`.
+
+---
+
+### New Features
+
+**tmux-based CLI workers (`/omc-teams` skill)**
+- Spawn N `claude`, `codex`, or `gemini` CLI processes in tmux split-panes for parallel task execution.
+- File-based coordination: each worker reads `inbox.md` and writes `done.json` on completion.
+- MCP tools: `omc_run_team_start` (non-blocking spawn), `omc_run_team_wait` (blocking poll with exponential backoff), `omc_run_team_status`, `omc_run_team_cleanup`.
+- Default wait timeout is 60 s; on timeout, call `omc_run_team_cleanup` instead of retrying.
+
+**`omc_run_team_cleanup` MCP tool**
+- Kills only worker panes (never `kill-session`) and writes a shutdown sentinel for graceful worker exit.
+
+---
+
+### Fixed
+
+**Team session cleanup hardening**
+- `killWorkerPanes()`: SIGTERM → 10 s grace → SIGKILL escalation per pane; leader-pane guard prevents ever killing the invoking shell; shutdown sentinel written before force-kill so workers can detect graceful shutdown.
+- `killTeamSession()`: never calls `kill-session` when `sessionName` contains `:` (split-pane mode); only worker-owned sessions are killed.
+- Pane IDs persisted to `~/.omc/team-jobs/{jobId}-panes.json` immediately after `startTeam()` resolves so cleanup always has valid targets.
+
+**Exit codes**
+- `doShutdown()` in `runtime-cli` now exits with `0` (completed), `1` (failed), or `2` (timeout) instead of always exiting `0`. `team-server` interprets close codes correctly.
+
+**HUD**
+- Plugin-cache lookup now respects `CLAUDE_CONFIG_DIR` (#897).
+
+**Update checks**
+- `session-start.mjs` and `auto-update.ts` now fetch version and install from `oh-my-claude-sisyphus` (the published npm package name) instead of `oh-my-claudecode`.
+
+**Team reliability (from 4.3.x backlog)**
+- Hard-kill backstop and orphan PID detection (#901).
+- Exit-code propagation from Claude CLI workers.
+- User-scoped job directory to avoid cross-user collisions.
+
+---
+
+### Security
+
+- `validateJobId()` enforces `/^omc-[a-z0-9]{1,12}$/` on all `job_id` inputs to `omc_run_team_*` tools, preventing path traversal via forged job IDs.
+
+---
+
 # oh-my-claudecode v4.3.4: MCP Reliability & Hook Hardening
 
 This release is a concentrated bug-fix batch targeting MCP bridge stability, hook field normalization, security hardening, and cross-platform compatibility. No breaking changes.

@@ -36,12 +36,12 @@ beforeEach(async () => {
   killedPanes = [];
   killedSessions = [];
   const cp = await import('child_process');
-  vi.mocked(cp.execFile).mockImplementation((_cmd: string, args: string[], cb: Function) => {
+  vi.mocked(cp.execFile).mockImplementation(((_cmd: string, args: string[], cb: Function) => {
     if (args[0] === 'kill-pane') killedPanes.push(args[2]);
     if (args[0] === 'kill-session') killedSessions.push(args[2]);
     cb(null, '', '');
     return {} as any;
-  });
+  }) as any);
 });
 
 afterEach(() => {
