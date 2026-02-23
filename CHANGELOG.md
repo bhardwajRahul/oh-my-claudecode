@@ -1,15 +1,20 @@
-# oh-my-claudecode v4.4.0: tmux CLI Workers, Surgical Pane Cleanup & Security Hardening
+# oh-my-claudecode v4.4.0: tmux CLI Workers, On-Demand Workers, Surgical Pane Cleanup & Security Hardening
 
-This release replaces the Codex/Gemini MCP server architecture with a tmux-based CLI worker runtime, hardens team session cleanup to never destroy the user's shell, and fixes several security issues in the team MCP surface.
+This is a major release that rewrites how Codex and Gemini are integrated into OMC. The old MCP server architecture (`x`, `g` providers) has been replaced entirely by a tmux-based CLI worker runtime that spawns real CLI processes in visible panes. Workers are now spun up on demand and torn down immediately when done. Team session cleanup has been hardened to never destroy the user's shell. Several security issues in the MCP surface have been fixed.
 
 ---
 
 ### Breaking Changes
 
-**Codex/Gemini MCP servers removed**
+**Codex/Gemini MCP servers removed** ⚠️
+
+The `x` (Codex) and `g` (Gemini) MCP server providers have been removed. Any `CLAUDE.md` or skill using `mcp__x__ask_codex`, `mcp__g__ask_gemini`, or `ToolSearch("ask_codex")` will no longer work.
+
 - `codexMcpServer`, `codexToolNames`, `geminiMcpServer`, `geminiToolNames` exports removed from `src/mcp/index.ts`.
-- The deleted files (`codex-core.ts`, `codex-server.ts`, `codex-standalone-server.ts`, `gemini-core.ts`, `gemini-server.ts`, `gemini-standalone-server.ts`) are no longer bundled.
-- **Migration**: use `/omc-teams N:codex "task"` or `/omc-teams N:gemini "task"` to run Codex/Gemini CLI workers in tmux panes. Keyword detection for "ask codex" / "use gemini" now automatically routes to `/omc-teams`.
+- The deleted source files — `codex-core.ts`, `codex-server.ts`, `codex-standalone-server.ts`, `gemini-core.ts`, `gemini-server.ts`, `gemini-standalone-server.ts` — are no longer compiled or bundled.
+- **Migration**: use `/omc-teams N:codex "task"` or `/omc-teams N:gemini "task"` to spawn Codex/Gemini CLI workers in tmux panes. The `/ccg` skill fans out Codex (analytical) + Gemini (design/UI) tasks simultaneously.
+- Keyword detection for `"ask codex"` / `"use gemini"` / `"delegate to codex"` now automatically routes to `/omc-teams` instead of the removed MCP tools.
+- `docs/CLAUDE.md` updated: `<mcp_routing>` section removed; `<tools>` section updated with `mcp__team__` tool names; `ccg` skill added to `<skills>`.
 
 ---
 
@@ -17,12 +22,24 @@ This release replaces the Codex/Gemini MCP server architecture with a tmux-based
 
 **tmux-based CLI workers (`/omc-teams` skill)**
 - Spawn N `claude`, `codex`, or `gemini` CLI processes in tmux split-panes for parallel task execution.
-- File-based coordination: each worker reads `inbox.md` and writes `done.json` on completion.
-- MCP tools: `omc_run_team_start` (non-blocking spawn), `omc_run_team_wait` (blocking poll with exponential backoff), `omc_run_team_status`, `omc_run_team_cleanup`.
-- Default wait timeout is 60 s; on timeout, call `omc_run_team_cleanup` instead of retrying.
+- File-based coordination: each worker reads `inbox.md` and writes `done.json` on completion — no inter-process messaging required.
+- MCP tools exposed via the `team` MCP server:
+  - `omc_run_team_start` — non-blocking spawn; returns `jobId` immediately
+  - `omc_run_team_wait` — blocking poll with exponential backoff (500 ms → 2 s); returns when all workers finish
+  - `omc_run_team_status` — non-blocking status check for mid-flight inspection
+  - `omc_run_team_cleanup` — kills only worker panes, never `kill-session`
+- Default `omc_run_team_wait` timeout is 60 s; on timeout workers keep running — call wait again or cleanup to cancel.
 
-**`omc_run_team_cleanup` MCP tool**
-- Kills only worker panes (never `kill-session`) and writes a shutdown sentinel for graceful worker exit.
+**On-demand worker lifecycle** (#904)
+- Workers are spawned only when a task arrives and killed immediately when their task completes.
+- Hard per-session timeout removed; workers live exactly as long as their task requires.
+- Eliminates idle workers consuming resources during long-running team pipelines.
+
+**`/ccg` skill — Claude-Codex-Gemini tri-model orchestration**
+- Fans out backend/analytical tasks to a Codex CLI worker and frontend/UI tasks to a Gemini CLI worker simultaneously.
+- Claude synthesizes both results into a unified response.
+- Falls back to Claude-only Task agents when Codex or Gemini CLI is not installed.
+- Execution protocol updated to use `mcp__team__omc_run_team_start` + `omc_run_team_wait` (removed stale TypeScript `startTeam`/`assignTask`/`monitorTeam`/`shutdownTeam` imports).
 
 ---
 
@@ -30,28 +47,38 @@ This release replaces the Codex/Gemini MCP server architecture with a tmux-based
 
 **Team session cleanup hardening**
 - `killWorkerPanes()`: SIGTERM → 10 s grace → SIGKILL escalation per pane; leader-pane guard prevents ever killing the invoking shell; shutdown sentinel written before force-kill so workers can detect graceful shutdown.
-- `killTeamSession()`: never calls `kill-session` when `sessionName` contains `:` (split-pane mode); only worker-owned sessions are killed.
-- Pane IDs persisted to `~/.omc/team-jobs/{jobId}-panes.json` immediately after `startTeam()` resolves so cleanup always has valid targets.
+- `killTeamSession()`: never calls `kill-session` when `sessionName` contains `:` (split-pane mode); only worker-owned sessions are ever destroyed.
+- `omc_run_team_wait` timeout no longer kills workers — it returns a timeout status and leaves workers running so the caller can decide whether to keep waiting or cleanup (#903).
+- Pane IDs persisted to `~/.omc/team-jobs/{jobId}-panes.json` immediately after `startTeam()` resolves so cleanup always has valid targets even after a lead crash.
 
 **Exit codes**
-- `doShutdown()` in `runtime-cli` now exits with `0` (completed), `1` (failed), or `2` (timeout) instead of always exiting `0`. `team-server` interprets close codes correctly.
+- `doShutdown()` in `runtime-cli` now exits with `0` (completed), `1` (failed), or `2` (timeout) instead of always exiting `0`. `team-server` interprets close codes correctly and surfaces them in `taskResults`.
+
+**Windows: false hook error labels** (#899, #902)
+- Hooks no longer run `sh` + `find-node.sh` on Windows, which was causing Claude Code to display "hook error" for hooks that completed successfully.
 
 **HUD**
-- Plugin-cache lookup now respects `CLAUDE_CONFIG_DIR` (#897).
+- Plugin-cache lookup now respects `CLAUDE_CONFIG_DIR` (#897), fixing HUD on systems where Claude's config directory is non-default.
 
 **Update checks**
-- `session-start.mjs` and `auto-update.ts` now fetch version and install from `oh-my-claude-sisyphus` (the published npm package name) instead of `oh-my-claudecode`.
+- `session-start.mjs` and `auto-update.ts` now fetch version and install from `oh-my-claude-sisyphus` (the published npm package name) instead of the legacy `oh-my-claudecode` package name.
 
 **Team reliability (from 4.3.x backlog)**
-- Hard-kill backstop and orphan PID detection (#901).
-- Exit-code propagation from Claude CLI workers.
-- User-scoped job directory to avoid cross-user collisions.
+- Hard-kill backstop and orphan PID detection (#901): processes that outlive their pane are forcefully terminated.
+- Exit-code propagation from Claude CLI workers: a worker that exits non-zero is now surfaced as `status: failed` in `taskResults`.
+- User-scoped job directory `~/.omc/team-jobs/` to avoid cross-user collisions on shared machines.
+
+**Docs & skills sync**
+- `docs/CLAUDE.md`: added `mcp__team__` tool names to `<tools>` section; added `ccg` skill entry with trigger patterns; removed stale `<mcp_routing>` section referencing removed providers.
+- `skills/ccg/SKILL.md`: replaced stale TypeScript module imports (`startTeam`, `assignTask`, `monitorTeam`, `shutdownTeam`) with the correct `mcp__team__omc_run_team_start` + `omc_run_team_wait` async pattern.
 
 ---
 
 ### Security
 
-- `validateJobId()` enforces `/^omc-[a-z0-9]{1,12}$/` on all `job_id` inputs to `omc_run_team_*` tools, preventing path traversal via forged job IDs.
+- `validateJobId()` enforces `/^omc-[a-z0-9]{1,12}$/` on all `job_id` inputs to `omc_run_team_*` MCP tools, preventing path traversal via forged job IDs.
+- Removed `context_files` path traversal vector that existed in the now-deleted Codex/Gemini MCP servers.
+- `SUBAGENT_HEADER` anti-recursion guard removed (no longer needed without Codex/Gemini MCP workers).
 
 ---
 
