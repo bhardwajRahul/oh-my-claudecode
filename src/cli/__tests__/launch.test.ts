@@ -274,3 +274,49 @@ describe('runClaude HUD integration', () => {
     expect(listHudWatchPaneIdsInCurrentWindow).toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// runClaude — outside-tmux mouse scrolling (issue #890 regression guard)
+// ---------------------------------------------------------------------------
+describe('runClaude outside-tmux — mouse scrolling (issue #890)', () => {
+  let processExitSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    processExitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+    (resolveLaunchPolicy as ReturnType<typeof vi.fn>).mockReturnValue('outside-tmux');
+    (execFileSync as ReturnType<typeof vi.fn>).mockReturnValue(Buffer.from(''));
+  });
+
+  afterEach(() => {
+    processExitSpy.mockRestore();
+  });
+
+  it('enables mouse mode in the new tmux session so scroll works instead of history navigation', () => {
+    runClaude('/tmp', [], 'sid');
+
+    const calls = vi.mocked(execFileSync).mock.calls;
+    const tmuxCall = calls.find(([cmd]) => cmd === 'tmux');
+    expect(tmuxCall).toBeDefined();
+
+    const tmuxArgs = tmuxCall![1] as string[];
+    // set-option -g mouse on must appear in the tmux command chain
+    expect(tmuxArgs).toContain('set-option');
+    expect(tmuxArgs).toContain('mouse');
+    expect(tmuxArgs).toContain('on');
+  });
+
+  it('places mouse mode setup before attach-session', () => {
+    runClaude('/tmp', [], 'sid');
+
+    const calls = vi.mocked(execFileSync).mock.calls;
+    const tmuxCall = calls.find(([cmd]) => cmd === 'tmux');
+    const tmuxArgs = tmuxCall![1] as string[];
+
+    const mouseIdx = tmuxArgs.indexOf('mouse');
+    const attachIdx = tmuxArgs.indexOf('attach-session');
+    expect(mouseIdx).toBeGreaterThanOrEqual(0);
+    expect(attachIdx).toBeGreaterThanOrEqual(0);
+    expect(mouseIdx).toBeLessThan(attachIdx);
+  });
+});

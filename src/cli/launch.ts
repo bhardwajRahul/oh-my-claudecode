@@ -181,6 +181,7 @@ function runClaudeOutsideTmux(cwd: string, args: string[], _sessionId: string, h
   const tmuxArgs = [
     'new-session', '-d', '-s', sessionName, '-c', cwd,
     claudeCmd,
+    ';', 'set-option', '-g', 'mouse', 'on',
   ];
 
   // Add HUD pane if available
