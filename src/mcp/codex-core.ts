@@ -69,6 +69,9 @@ export type ReasoningEffort = typeof VALID_REASONING_EFFORTS[number];
 export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per file
 export const MAX_STDOUT_BYTES = 10 * 1024 * 1024; // 10MB stdout cap
 
+const RATE_LIMIT_OR_DISCONNECT_REGEX = /429|rate.?limit|too many requests|quota.?exceeded|resource.?exhausted|stream disconnected|transport closed|econnreset|epipe/i;
+const RETRYABLE_MODEL_OR_RATE_LIMIT_OR_DISCONNECT_REGEX = /model error|model_not_found|model is not supported|429|rate.?limit|too many requests|quota.?exceeded|resource.?exhausted|stream disconnected|transport closed|econnreset|epipe/i;
+
 /**
  * Compute exponential backoff delay with jitter for rate limit retries.
  * Returns delay in ms: min(initialDelay * 2^attempt, maxDelay) * random(0.5, 1.0)
@@ -117,8 +120,8 @@ export function isModelError(output: string): { isError: boolean; message: strin
  */
 export function isRateLimitError(output: string, stderr: string = ''): { isError: boolean; message: string } {
   const combined = `${output}\n${stderr}`;
-  // Check for 429 status codes and rate limit messages in both stdout and stderr
-  if (/429|rate.?limit|too many requests|quota.?exceeded|resource.?exhausted/i.test(combined)) {
+  // Check for 429/rate-limit and transport disconnect signatures in stdout/stderr
+  if (RATE_LIMIT_OR_DISCONNECT_REGEX.test(combined)) {
     // Extract a meaningful message
     const lines = combined.split('\n').filter(l => l.trim());
     for (const line of lines) {
@@ -126,15 +129,15 @@ export function isRateLimitError(output: string, stderr: string = ''): { isError
         const event = JSON.parse(line);
         const msg = typeof event.message === 'string' ? event.message :
                     typeof event.error?.message === 'string' ? event.error.message : '';
-        if (/429|rate.?limit|too many requests|quota.?exceeded|resource.?exhausted/i.test(msg)) {
+        if (RATE_LIMIT_OR_DISCONNECT_REGEX.test(msg)) {
           return { isError: true, message: msg };
         }
       } catch { /* check raw line */ }
-      if (/429|rate.?limit|too many requests|quota.?exceeded|resource.?exhausted/i.test(line)) {
+      if (RATE_LIMIT_OR_DISCONNECT_REGEX.test(line)) {
         return { isError: true, message: line.trim() };
       }
     }
-    return { isError: true, message: 'Rate limit error detected' };
+    return { isError: true, message: 'Retryable rate-limit/transport error detected' };
   }
   return { isError: false, message: '' };
 }
@@ -322,7 +325,7 @@ export async function executeCodexWithFallback(
         return { response, usedFallback: false, actualModel: effectiveModel };
       } catch (err) {
         lastError = err as Error;
-        if (!/429|rate.?limit|too many requests|quota.?exceeded|resource.?exhausted/i.test(lastError.message)) {
+        if (!RATE_LIMIT_OR_DISCONNECT_REGEX.test(lastError.message)) {
           throw lastError; // Non-rate-limit error, throw immediately
         }
         if (attempt < RATE_LIMIT_RETRY_COUNT) {
@@ -353,11 +356,11 @@ export async function executeCodexWithFallback(
     } catch (err) {
       lastError = err as Error;
       // Retry on model errors and rate limit errors
-      if (!/model error|model_not_found|model is not supported|429|rate.?limit|too many requests|quota.?exceeded|resource.?exhausted/i.test(lastError.message)) {
+      if (!RETRYABLE_MODEL_OR_RATE_LIMIT_OR_DISCONNECT_REGEX.test(lastError.message)) {
         throw lastError; // Non-retryable error, don't retry
       }
       // Add backoff delay for rate limit errors before trying next model
-      if (/429|rate.?limit|too many requests|quota.?exceeded|resource.?exhausted/i.test(lastError.message)) {
+      if (RATE_LIMIT_OR_DISCONNECT_REGEX.test(lastError.message)) {
         const delay = computeBackoffDelay(rateLimitAttempt, RATE_LIMIT_INITIAL_DELAY, RATE_LIMIT_MAX_DELAY);
         await sleepFn(delay);
         rateLimitAttempt++;

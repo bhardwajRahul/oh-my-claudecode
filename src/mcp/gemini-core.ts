@@ -59,6 +59,7 @@ export const GEMINI_RECOMMENDED_ROLES = ['designer', 'writer', 'vision'] as cons
 
 export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per file
 export const MAX_STDOUT_BYTES = 10 * 1024 * 1024; // 10MB stdout cap
+const GEMINI_RATE_LIMIT_OR_DISCONNECT_REGEX = /429|rate.?limit|too many requests|quota.?exceeded|resource.?exhausted|stream disconnected|transport closed|econnreset|epipe/i;
 
 /**
  * Check if Gemini output/stderr indicates a rate-limit (429) or quota error
@@ -71,10 +72,10 @@ export function isGeminiRetryableError(stdout: string, stderr: string = ''): { i
     const match = combined.match(/.*(?:model.?not.?found|model is not supported|model.+does not exist|not.+available).*/i);
     return { isError: true, message: match?.[0]?.trim() || 'Model not available', type: 'model' };
   }
-  // Check for 429/rate limit errors
-  if (/429|rate.?limit|too many requests|quota.?exceeded|resource.?exhausted/i.test(combined)) {
-    const match = combined.match(/.*(?:429|rate.?limit|too many requests|quota.?exceeded|resource.?exhausted).*/i);
-    return { isError: true, message: match?.[0]?.trim() || 'Rate limit error detected', type: 'rate_limit' };
+  // Check for 429/rate limit and transport disconnect signatures
+  if (GEMINI_RATE_LIMIT_OR_DISCONNECT_REGEX.test(combined)) {
+    const match = combined.match(/.*(?:429|rate.?limit|too many requests|quota.?exceeded|resource.?exhausted|stream disconnected|transport closed|econnreset|epipe).*/i);
+    return { isError: true, message: match?.[0]?.trim() || 'Retryable rate-limit/transport error detected', type: 'rate_limit' };
   }
   return { isError: false, message: '', type: 'none' };
 }
