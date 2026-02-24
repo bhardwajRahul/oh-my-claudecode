@@ -83,8 +83,7 @@ mcp__team__omc_run_team_start({
     {"subject": "Subtask 1 title", "description": "Full description..."},
     {"subject": "Subtask 2 title", "description": "Full description..."}
   ],
-  "cwd": "{cwd}",
-  "timeoutSeconds": 300
+  "cwd": "{cwd}"
 })
 ```
 
@@ -103,10 +102,11 @@ mcp__team__omc_run_team_wait({
 })
 ```
 
-> **Timeout guidance:** Use `60000` (60 s) as the default. If the job times out,
-> **workers are left running** — the timeout does NOT kill them. You have two options:
+> **Timeout guidance:** `timeout_ms` is optional; the default wait timeout is fine.
+> If a wait call times out, **workers are left running** — wait timeout does NOT kill
+> worker processes or panes. You have two options:
 > - Call `omc_run_team_wait` again with the same `job_id` to keep waiting (workers continue)
-> - Call `omc_run_team_cleanup` to explicitly stop all worker panes when you want to cancel
+> - Call `omc_run_team_cleanup` only when you explicitly want to cancel and stop panes
 >
 > Teams can silently stall due to stuck workers or tmux session issues. Use
 > `mcp__team__omc_run_team_status` to inspect live progress before deciding to cancel.
@@ -155,7 +155,7 @@ state_write(mode="team", current_phase="completed", active=false)
 | `not inside tmux` | Shell not running inside a tmux session | Start tmux and rerun |
 | `codex: command not found` | Codex CLI not installed | `npm install -g @openai/codex` |
 | `gemini: command not found` | Gemini CLI not installed | `npm install -g @google/gemini-cli` |
-| `status: timeout` | Workers exceeded 300s | Reduce task scope or raise `timeoutSeconds` in config |
+| `status: timeout` | Explicit runtime timeout (`timeoutSeconds`) was reached | Increase explicit `timeoutSeconds` or remove it to run without runtime timeout; note `wait timeout_ms` only ends the wait call and does not stop workers |
 | `status: failed` | All workers exited with work remaining | Check stderr for crash details |
 
 ---
