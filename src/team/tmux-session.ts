@@ -8,7 +8,7 @@
  */
 
 import { execSync, execFileSync } from 'child_process';
-import { join } from 'path';
+import { join, basename } from 'path';
 import fs from 'fs/promises';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
@@ -27,6 +27,46 @@ export interface WorkerPaneConfig {
   envVars: Record<string, string>;
   launchCmd: string;
   cwd: string;
+}
+
+export function getDefaultShell(): string {
+  if (process.platform === 'win32') {
+    return process.env.COMSPEC || 'cmd.exe';
+  }
+  return process.env.SHELL || '/bin/bash';
+}
+
+function escapeForCmdSet(value: string): string {
+  return value.replace(/"/g, '""');
+}
+
+function shellNameFromPath(shellPath: string): string {
+  const shellName = basename(shellPath.replace(/\\/g, '/'));
+  return shellName.replace(/\.(exe|cmd|bat)$/i, '');
+}
+
+export function buildWorkerStartCommand(config: WorkerPaneConfig): string {
+  const shell = getDefaultShell();
+
+  if (process.platform === 'win32') {
+    const envPrefix = Object.entries(config.envVars)
+      .map(([k, v]) => `set "${k}=${escapeForCmdSet(v)}"`)
+      .join(' && ');
+    const launch = config.launchCmd;
+    const cmdBody = envPrefix ? `${envPrefix} && ${launch}` : launch;
+    return `${shell} /d /s /c "${cmdBody}"`;
+  }
+
+  const envString = Object.entries(config.envVars)
+    .map(([k, v]) => `${k}=${v}`)
+    .join(' ');
+
+  const shellName = shellNameFromPath(shell) || 'bash';
+  const rcFile = process.env.HOME ? `${process.env.HOME}/.${shellName}rc` : '';
+  // Quote rcFile to prevent shell injection if HOME contains metacharacters
+  const sourceCmd = rcFile ? `[ -f "${rcFile}" ] && source "${rcFile}"; ` : '';
+
+  return `env ${envString} ${shell} -c "${sourceCmd}exec ${config.launchCmd}"`;
 }
 
 /** Validate tmux is available. Throws with install instructions if not. */
@@ -248,18 +288,7 @@ export async function spawnWorkerInPane(
   const { promisify } = await import('util');
   const execFileAsync = promisify(execFile);
 
-  // Build env prefix string
-  const envString = Object.entries(config.envVars)
-    .map(([k, v]) => `${k}=${v}`)
-    .join(' ');
-
-  const shell = process.env.SHELL || '/bin/bash';
-  const shellName = shell.split('/').pop() || 'bash';
-  const rcFile = process.env.HOME ? `${process.env.HOME}/.${shellName}rc` : '';
-  // Quote rcFile to prevent shell injection if HOME contains metacharacters
-  const sourceCmd = rcFile ? `[ -f "${rcFile}" ] && source "${rcFile}"; ` : '';
-
-  const startCmd = `env ${envString} ${shell} -c "${sourceCmd}exec ${config.launchCmd}"`;
+  const startCmd = buildWorkerStartCommand(config);
 
   // Use -l (literal) flag to prevent tmux key-name parsing of the command string
   await execFileAsync('tmux', [
