@@ -35,17 +35,12 @@ import { teleportCommand, teleportListCommand, teleportRemoveCommand } from './c
 import { getRuntimePackageVersion } from '../lib/version.js';
 import { launchCommand } from './launch.js';
 import { interopCommand } from './interop.js';
+import { warnIfWin32 } from './win32-warning.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const version = getRuntimePackageVersion();
 const program = new Command();
 // Win32 platform warning - OMC requires tmux which is not available on native Windows
-if (process.platform === 'win32') {
-    console.warn(chalk.yellow.bold('\n⚠  WARNING: Native Windows (win32) detected'));
-    console.warn(chalk.yellow('   OMC requires tmux, which is not available on native Windows.'));
-    console.warn(chalk.yellow('   Please use WSL2 instead: https://learn.microsoft.com/en-us/windows/wsl/install'));
-    console.warn(chalk.red('   Native win32 support issues will not be accepted. Figure it out yourself.'));
-    console.warn('');
-}
+warnIfWin32();
 // Helper functions for auto-backfill
 async function checkIfBackfillNeeded() {
     const tokenLogPath = join(homedir(), '.omc', 'state', 'token-tracking.jsonl');

@@ -346,10 +346,12 @@ ${newState.prompt}`;
  * Unified handler for ultrawork, ralph, and todo-continuation
  */
 async function processPersistentMode(input) {
-    const sessionId = input.sessionId;
+    const rawSessionId = input.session_id;
+    const sessionId = input.sessionId ?? rawSessionId;
     const directory = resolveToWorktreeRoot(input.directory);
     // Lazy-load persistent-mode and todo-continuation modules
     const { checkPersistentModes, createHookOutput, shouldSendIdleNotification, recordIdleNotificationSent } = await import("./persistent-mode/index.js");
+    const { isExplicitCancelCommand } = await import("./todo-continuation/index.js");
     // Extract stop context for abort detection (supports both camelCase and snake_case)
     const stopContext = {
         stop_reason: input.stop_reason,
@@ -375,10 +377,10 @@ async function processPersistentMode(input) {
             const isContextLimit = stopContext.stop_reason === "context_limit" || stopContext.stopReason === "context_limit";
             if (!isAbort && !isContextLimit) {
                 // Per-session cooldown: prevent notification spam when the session idles repeatedly.
-                // Mirrors the cooldown logic in scripts/persistent-mode.cjs (closes #842).
+                // Uses session-scoped state so one session does not suppress another.
                 const stateDir = join(directory, ".omc", "state");
-                if (shouldSendIdleNotification(stateDir)) {
-                    recordIdleNotificationSent(stateDir);
+                if (shouldSendIdleNotification(stateDir, sessionId)) {
+                    recordIdleNotificationSent(stateDir, sessionId);
                     import("../notifications/index.js").then(({ notify }) => notify("session-idle", {
                         sessionId,
                         projectPath: directory,
@@ -390,6 +392,10 @@ async function processPersistentMode(input) {
             // Stop can fire for normal "idle" turns while the session is still active.
             // Reply cleanup is handled in the true SessionEnd hook only.
         }
+        return output;
+    }
+    // Explicit cancel should suppress team continuation prompts.
+    if (isExplicitCancelCommand(stopContext)) {
         return output;
     }
     const stage = getTeamStage(teamState);

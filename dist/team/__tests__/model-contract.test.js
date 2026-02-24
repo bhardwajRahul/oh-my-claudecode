@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getContract, buildLaunchArgs, getWorkerEnv, parseCliOutput } from '../model-contract.js';
+import { getContract, buildLaunchArgs, buildWorkerArgv, getWorkerEnv, parseCliOutput } from '../model-contract.js';
 describe('model-contract', () => {
     describe('getContract', () => {
         it('returns contract for claude', () => {
@@ -26,9 +26,10 @@ describe('model-contract', () => {
             const args = buildLaunchArgs('claude', { teamName: 't', workerName: 'w', cwd: '/tmp' });
             expect(args).toContain('--dangerously-skip-permissions');
         });
-        it('codex includes --full-auto', () => {
+        it('codex includes --full-auto and bypass approvals/sandbox', () => {
             const args = buildLaunchArgs('codex', { teamName: 't', workerName: 'w', cwd: '/tmp' });
             expect(args).toContain('--full-auto');
+            expect(args).toContain('--dangerously-bypass-approvals-and-sandbox');
         });
         it('gemini includes --yolo', () => {
             const args = buildLaunchArgs('gemini', { teamName: 't', workerName: 'w', cwd: '/tmp' });
@@ -46,6 +47,18 @@ describe('model-contract', () => {
             expect(env.OMC_TEAM_WORKER).toBe('my-team/worker-1');
             expect(env.OMC_TEAM_NAME).toBe('my-team');
             expect(env.OMC_WORKER_AGENT_TYPE).toBe('codex');
+        });
+        it('rejects invalid team names', () => {
+            expect(() => getWorkerEnv('Bad-Team', 'worker-1', 'codex')).toThrow('Invalid team name');
+        });
+    });
+    describe('buildWorkerArgv', () => {
+        it('builds binary + args', () => {
+            expect(buildWorkerArgv('codex', { teamName: 'my-team', workerName: 'worker-1', cwd: '/tmp' })).toEqual([
+                'codex',
+                '--full-auto',
+                '--dangerously-bypass-approvals-and-sandbox',
+            ]);
         });
     });
     describe('parseCliOutput', () => {

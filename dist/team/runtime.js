@@ -1,13 +1,15 @@
 import { mkdir, writeFile, readFile, rm, rename } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { buildWorkerCommand, validateCliAvailable, getWorkerEnv as getModelWorkerEnv } from './model-contract.js';
+import { buildWorkerArgv, validateCliAvailable, getWorkerEnv as getModelWorkerEnv } from './model-contract.js';
+import { validateTeamName } from './team-name.js';
 import { createTeamSession, spawnWorkerInPane, sendToWorker, isWorkerAlive, killTeamSession, } from './tmux-session.js';
 import { composeInitialInbox, ensureWorkerStateDir, writeWorkerOverlay, } from './worker-bootstrap.js';
 function workerName(index) {
     return `worker-${index + 1}`;
 }
 function stateRoot(cwd, teamName) {
+    validateTeamName(teamName);
     return join(cwd, `.omc/state/team/${teamName}`);
 }
 async function writeJson(filePath, data) {
@@ -150,6 +152,7 @@ function buildInitialTaskInstruction(teamName, workerName, task, taskId) {
  */
 export async function startTeam(config) {
     const { teamName, agentTypes, tasks, cwd } = config;
+    validateTeamName(teamName);
     // Validate CLIs are available
     for (const agentType of [...new Set(agentTypes)]) {
         validateCliAvailable(agentType);
@@ -213,6 +216,7 @@ export async function startTeam(config) {
  * Monitor team: poll worker health, detect stalls, return snapshot.
  */
 export async function monitorTeam(teamName, cwd, workerPaneIds) {
+    validateTeamName(teamName);
     const monitorStartedAt = Date.now();
     const root = stateRoot(cwd, teamName);
     // Read task counts
@@ -376,7 +380,7 @@ export async function spawnWorkerForTask(runtime, workerNameValue, taskIndex) {
         ?? runtime.config.agentTypes[0]
         ?? 'claude';
     const envVars = getModelWorkerEnv(runtime.teamName, workerNameValue, agentType);
-    const launchCmd = buildWorkerCommand(agentType, {
+    const [launchBinary, ...launchArgs] = buildWorkerArgv(agentType, {
         teamName: runtime.teamName,
         workerName: workerNameValue,
         cwd: runtime.cwd,
@@ -385,7 +389,8 @@ export async function spawnWorkerForTask(runtime, workerNameValue, taskIndex) {
         teamName: runtime.teamName,
         workerName: workerNameValue,
         envVars,
-        launchCmd,
+        launchBinary,
+        launchArgs,
         cwd: runtime.cwd,
     };
     await spawnWorkerInPane(runtime.sessionName, paneId, paneConfig);

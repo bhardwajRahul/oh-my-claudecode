@@ -1,4 +1,5 @@
 import { spawnSync } from 'child_process';
+import { validateTeamName } from './team-name.js';
 const CONTRACTS = {
     claude: {
         agentType: 'claude',
@@ -19,7 +20,7 @@ const CONTRACTS = {
         binary: 'codex',
         installInstructions: 'Install Codex CLI: npm install -g @openai/codex',
         buildLaunchArgs(model, extraFlags = []) {
-            const args = ['--full-auto'];
+            const args = ['--full-auto', '--dangerously-bypass-approvals-and-sandbox'];
             if (model)
                 args.push('--model', model);
             return [...args, ...extraFlags];
@@ -85,12 +86,19 @@ export function validateCliAvailable(agentType) {
 export function buildLaunchArgs(agentType, config) {
     return getContract(agentType).buildLaunchArgs(config.model, config.extraFlags);
 }
-export function buildWorkerCommand(agentType, config) {
+export function buildWorkerArgv(agentType, config) {
+    validateTeamName(config.teamName);
     const contract = getContract(agentType);
     const args = buildLaunchArgs(agentType, config);
-    return `${contract.binary} ${args.join(' ')}`;
+    return [contract.binary, ...args];
+}
+export function buildWorkerCommand(agentType, config) {
+    return buildWorkerArgv(agentType, config)
+        .map((part) => `'${part.replace(/'/g, `'\"'\"'`)}'`)
+        .join(' ');
 }
 export function getWorkerEnv(teamName, workerName, agentType) {
+    validateTeamName(teamName);
     return {
         OMC_TEAM_WORKER: `${teamName}/${workerName}`,
         OMC_TEAM_NAME: teamName,

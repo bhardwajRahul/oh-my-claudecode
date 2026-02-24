@@ -34,6 +34,19 @@ var import_fs3 = require("fs");
 
 // src/team/model-contract.ts
 var import_child_process = require("child_process");
+
+// src/team/team-name.ts
+var TEAM_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,48}[a-z0-9]$/;
+function validateTeamName(teamName) {
+  if (!TEAM_NAME_PATTERN.test(teamName)) {
+    throw new Error(
+      `Invalid team name: "${teamName}". Team name must match /^[a-z0-9][a-z0-9-]{0,48}[a-z0-9]$/.`
+    );
+  }
+  return teamName;
+}
+
+// src/team/model-contract.ts
 var CONTRACTS = {
   claude: {
     agentType: "claude",
@@ -53,7 +66,7 @@ var CONTRACTS = {
     binary: "codex",
     installInstructions: "Install Codex CLI: npm install -g @openai/codex",
     buildLaunchArgs(model, extraFlags = []) {
-      const args = ["--full-auto"];
+      const args = ["--full-auto", "--dangerously-bypass-approvals-and-sandbox"];
       if (model) args.push("--model", model);
       return [...args, ...extraFlags];
     },
@@ -115,12 +128,14 @@ function validateCliAvailable(agentType) {
 function buildLaunchArgs(agentType, config) {
   return getContract(agentType).buildLaunchArgs(config.model, config.extraFlags);
 }
-function buildWorkerCommand(agentType, config) {
+function buildWorkerArgv(agentType, config) {
+  validateTeamName(config.teamName);
   const contract = getContract(agentType);
   const args = buildLaunchArgs(agentType, config);
-  return `${contract.binary} ${args.join(" ")}`;
+  return [contract.binary, ...args];
 }
 function getWorkerEnv(teamName, workerName2, agentType) {
+  validateTeamName(teamName);
   return {
     OMC_TEAM_WORKER: `${teamName}/${workerName2}`,
     OMC_TEAM_NAME: teamName,
@@ -132,6 +147,75 @@ function getWorkerEnv(teamName, workerName2, agentType) {
 var import_child_process2 = require("child_process");
 var import_path = require("path");
 var import_promises = __toESM(require("fs/promises"), 1);
+function getDefaultShell() {
+  if (process.platform === "win32") {
+    return process.env.COMSPEC || "cmd.exe";
+  }
+  return process.env.SHELL || "/bin/bash";
+}
+function escapeForCmdSet(value) {
+  return value.replace(/"/g, '""');
+}
+function shellNameFromPath(shellPath) {
+  const shellName = (0, import_path.basename)(shellPath.replace(/\\/g, "/"));
+  return shellName.replace(/\.(exe|cmd|bat)$/i, "");
+}
+function shellEscape(value) {
+  return `'${value.replace(/'/g, `'"'"'`)}'`;
+}
+function assertSafeEnvKey(key) {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+    throw new Error(`Invalid environment key: "${key}"`);
+  }
+}
+function getLaunchWords(config) {
+  if (config.launchBinary) {
+    return [config.launchBinary, ...config.launchArgs ?? []];
+  }
+  if (config.launchCmd) {
+    return [config.launchCmd];
+  }
+  throw new Error("Missing worker launch command. Provide launchBinary or launchCmd.");
+}
+function buildWorkerStartCommand(config) {
+  const shell = getDefaultShell();
+  const launchWords = getLaunchWords(config);
+  if (process.platform === "win32") {
+    const envPrefix = Object.entries(config.envVars).map(([k, v]) => {
+      assertSafeEnvKey(k);
+      return `set "${k}=${escapeForCmdSet(v)}"`;
+    }).join(" && ");
+    const launch = config.launchBinary ? launchWords.map((part) => `"${escapeForCmdSet(part)}"`).join(" ") : launchWords[0];
+    const cmdBody = envPrefix ? `${envPrefix} && ${launch}` : launch;
+    return `${shell} /d /s /c "${cmdBody}"`;
+  }
+  if (config.launchBinary) {
+    const envAssignments = Object.entries(config.envVars).map(([key, value]) => {
+      assertSafeEnvKey(key);
+      return `${key}=${shellEscape(value)}`;
+    });
+    const shellName2 = shellNameFromPath(shell) || "bash";
+    const rcFile2 = process.env.HOME ? `${process.env.HOME}/.${shellName2}rc` : "";
+    const script = rcFile2 ? `[ -f ${shellEscape(rcFile2)} ] && . ${shellEscape(rcFile2)}; exec "$@"` : 'exec "$@"';
+    return [
+      "env",
+      ...envAssignments,
+      shell,
+      "-lc",
+      script,
+      "--",
+      ...launchWords
+    ].map(shellEscape).join(" ");
+  }
+  const envString = Object.entries(config.envVars).map(([k, v]) => {
+    assertSafeEnvKey(k);
+    return `${k}=${shellEscape(v)}`;
+  }).join(" ");
+  const shellName = shellNameFromPath(shell) || "bash";
+  const rcFile = process.env.HOME ? `${process.env.HOME}/.${shellName}rc` : "";
+  const sourceCmd = rcFile ? `[ -f "${rcFile}" ] && source "${rcFile}"; ` : "";
+  return `env ${envString} ${shell} -c "${sourceCmd}exec ${launchWords[0]}"`;
+}
 async function createTeamSession(teamName, workerCount, cwd) {
   const { execFile } = await import("child_process");
   const { promisify } = await import("util");
@@ -218,12 +302,8 @@ async function spawnWorkerInPane(sessionName, paneId, config) {
   const { execFile } = await import("child_process");
   const { promisify } = await import("util");
   const execFileAsync = promisify(execFile);
-  const envString = Object.entries(config.envVars).map(([k, v]) => `${k}=${v}`).join(" ");
-  const shell = process.env.SHELL || "/bin/bash";
-  const shellName = shell.split("/").pop() || "bash";
-  const rcFile = process.env.HOME ? `${process.env.HOME}/.${shellName}rc` : "";
-  const sourceCmd = rcFile ? `[ -f "${rcFile}" ] && source "${rcFile}"; ` : "";
-  const startCmd = `env ${envString} ${shell} -c "${sourceCmd}exec ${config.launchCmd}"`;
+  validateTeamName(config.teamName);
+  const startCmd = buildWorkerStartCommand(config);
   await execFileAsync("tmux", [
     "send-keys",
     "-t",
@@ -573,6 +653,7 @@ function workerName(index) {
   return `worker-${index + 1}`;
 }
 function stateRoot(cwd, teamName) {
+  validateTeamName(teamName);
   return (0, import_path5.join)(cwd, `.omc/state/team/${teamName}`);
 }
 async function writeJson(filePath, data) {
@@ -701,6 +782,7 @@ function buildInitialTaskInstruction(teamName, workerName2, task, taskId) {
 }
 async function startTeam(config) {
   const { teamName, agentTypes, tasks, cwd } = config;
+  validateTeamName(teamName);
   for (const agentType of [...new Set(agentTypes)]) {
     validateCliAvailable(agentType);
   }
@@ -756,6 +838,7 @@ async function startTeam(config) {
   return runtime;
 }
 async function monitorTeam(teamName, cwd, workerPaneIds) {
+  validateTeamName(teamName);
   const monitorStartedAt = Date.now();
   const root = stateRoot(cwd, teamName);
   const taskScanStartedAt = Date.now();
@@ -896,7 +979,7 @@ async function spawnWorkerForTask(runtime, workerNameValue, taskIndex) {
   const workerIndex = parseWorkerIndex(workerNameValue);
   const agentType = runtime.config.agentTypes[workerIndex % runtime.config.agentTypes.length] ?? runtime.config.agentTypes[0] ?? "claude";
   const envVars = getWorkerEnv(runtime.teamName, workerNameValue, agentType);
-  const launchCmd = buildWorkerCommand(agentType, {
+  const [launchBinary, ...launchArgs] = buildWorkerArgv(agentType, {
     teamName: runtime.teamName,
     workerName: workerNameValue,
     cwd: runtime.cwd
@@ -905,7 +988,8 @@ async function spawnWorkerForTask(runtime, workerNameValue, taskIndex) {
     teamName: runtime.teamName,
     workerName: workerNameValue,
     envVars,
-    launchCmd,
+    launchBinary,
+    launchArgs,
     cwd: runtime.cwd
   };
   await spawnWorkerInPane(runtime.sessionName, paneId, paneConfig);

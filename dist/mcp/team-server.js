@@ -22,6 +22,7 @@ import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { homedir } from 'os';
 import { killWorkerPanes } from '../team/tmux-session.js';
+import { validateTeamName } from '../team/team-name.js';
 const omcTeamJobs = new Map();
 const OMC_JOBS_DIR = join(homedir(), '.omc', 'team-jobs');
 function persistJob(jobId, job) {
@@ -65,7 +66,7 @@ const startSchema = z.object({
         description: z.string().describe('Full task description'),
     })).describe('Tasks to distribute to workers'),
     cwd: z.string().describe('Working directory (absolute path)'),
-    timeoutSeconds: z.number().optional().describe('Timeout in seconds (default: 300)'),
+    timeoutSeconds: z.number().optional().describe('Optional runtime timeout in seconds (default: 0 = no implicit runtime timeout; set explicitly to enforce one)'),
 });
 const statusSchema = z.object({
     job_id: z.string().describe('Job ID returned by omc_run_team_start'),
@@ -79,6 +80,7 @@ const waitSchema = z.object({
 // ---------------------------------------------------------------------------
 async function handleStart(args) {
     const input = startSchema.parse(args);
+    validateTeamName(input.teamName);
     const jobId = `omc-${Date.now().toString(36)}`;
     const runtimeCliPath = join(__dirname, 'runtime-cli.cjs');
     const job = { status: 'running', startedAt: Date.now(), teamName: input.teamName, cwd: input.cwd };
@@ -136,6 +138,7 @@ async function handleStart(args) {
 }
 async function handleStatus(args) {
     const { job_id } = statusSchema.parse(args);
+    validateJobId(job_id);
     const job = omcTeamJobs.get(job_id) ?? loadJobFromDisk(job_id);
     if (!job) {
         return { content: [{ type: 'text', text: JSON.stringify({ error: `No job found: ${job_id}` }) }] };
@@ -156,6 +159,7 @@ async function handleStatus(args) {
 }
 async function handleWait(args) {
     const { job_id, timeout_ms = 300_000 } = waitSchema.parse(args);
+    validateJobId(job_id);
     // Cap at 1 hour — matches Codex/Gemini wait_for_job behaviour
     const deadline = Date.now() + Math.min(timeout_ms, 3_600_000);
     let pollDelay = 500; // ms; grows to 2000ms via 1.5× backoff
@@ -233,7 +237,7 @@ const TOOLS = [
                     description: 'Tasks to distribute to workers',
                 },
                 cwd: { type: 'string', description: 'Working directory (absolute path)' },
-                timeoutSeconds: { type: 'number', description: 'Timeout in seconds (default: 300)' },
+                timeoutSeconds: { type: 'number', description: 'Optional runtime timeout in seconds (default: 0 = no implicit runtime timeout; set explicitly to enforce one)' },
             },
             required: ['teamName', 'agentTypes', 'tasks', 'cwd'],
         },
