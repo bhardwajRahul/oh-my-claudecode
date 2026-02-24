@@ -26,7 +26,7 @@ describe('CLI win32 platform warning (#923)', () => {
     expect(allOutput).toContain('win32');
     expect(allOutput).toContain('tmux');
     expect(allOutput).toContain('WSL2');
-    expect(allOutput).toContain('will not be accepted');
+    expect(allOutput).toContain('experimental');
   });
 
   it('should NOT warn on linux platform', async () => {
