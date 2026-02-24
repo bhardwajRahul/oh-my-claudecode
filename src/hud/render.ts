@@ -18,6 +18,7 @@ import { renderRateLimits, renderRateLimitsWithBar, renderCustomBuckets } from '
 import { renderPermission } from './elements/permission.js';
 import { renderThinking } from './elements/thinking.js';
 import { renderSession } from './elements/session.js';
+import { renderPromptTime } from './elements/prompt-time.js';
 import { renderAutopilot } from './elements/autopilot.js';
 import { renderCwd } from './elements/cwd.js';
 import { renderGitRepo, renderGitBranch } from './elements/git.js';
@@ -211,6 +212,12 @@ export async function render(context: HudRenderContext, config: HudConfig): Prom
   if (enabledElements.thinking && context.thinkingState) {
     const thinking = renderThinking(context.thinkingState, enabledElements.thinkingFormat || 'text');
     if (thinking) elements.push(thinking);
+  }
+
+  // Prompt submission time
+  if (enabledElements.promptTime) {
+    const prompt = renderPromptTime(context.promptTime);
+    if (prompt) elements.push(prompt);
   }
 
   // Session health indicator

@@ -28,6 +28,7 @@ export const DEFAULT_HUD_CONFIG = {
         permissionStatus: false, // Disabled: heuristic-based, causes false positives
         thinking: true,
         thinkingFormat: 'text', // Text format for backward compatibility
+        promptTime: true, // Show last prompt time by default
         sessionHealth: true,
         // showSessionDuration, showCostPerHour, showBudgetWarning: undefined = default to true
         useBars: false, // Disabled by default for backwards compatibility
@@ -75,6 +76,7 @@ export const PRESET_CONFIGS = {
         permissionStatus: false,
         thinking: false,
         thinkingFormat: 'text',
+        promptTime: false,
         sessionHealth: false,
         useBars: false,
         showCache: false,
@@ -106,6 +108,7 @@ export const PRESET_CONFIGS = {
         permissionStatus: false,
         thinking: false,
         thinkingFormat: 'text',
+        promptTime: false,
         sessionHealth: false,
         useBars: false,
         showCache: true,
@@ -137,6 +140,7 @@ export const PRESET_CONFIGS = {
         permissionStatus: false,
         thinking: true,
         thinkingFormat: 'text',
+        promptTime: true,
         sessionHealth: true,
         useBars: true,
         showCache: true,
@@ -168,6 +172,7 @@ export const PRESET_CONFIGS = {
         permissionStatus: false,
         thinking: true,
         thinkingFormat: 'text',
+        promptTime: true,
         sessionHealth: true,
         useBars: true,
         showCache: true,
@@ -199,6 +204,7 @@ export const PRESET_CONFIGS = {
         permissionStatus: false,
         thinking: true,
         thinkingFormat: 'text',
+        promptTime: true,
         sessionHealth: true,
         useBars: false,
         showCache: true,
@@ -230,6 +236,7 @@ export const PRESET_CONFIGS = {
         permissionStatus: false,
         thinking: true,
         thinkingFormat: 'text',
+        promptTime: true,
         sessionHealth: true,
         useBars: true,
         showCache: true,

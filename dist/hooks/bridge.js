@@ -21,6 +21,7 @@ import { removeCodeBlocks, getAllKeywordsWithSizeCheck } from "./keyword-detecto
 import { processOrchestratorPreTool, processOrchestratorPostTool } from "./omc-orchestrator/index.js";
 import { normalizeHookInput } from "./bridge-normalize.js";
 import { addBackgroundTask, getRunningTaskCount, } from "../hud/background-tasks.js";
+import { readHudState, writeHudState } from "../hud/state.js";
 import { loadConfig } from "../config/loader.js";
 import { ULTRAWORK_MESSAGE, ULTRATHINK_MESSAGE, SEARCH_MESSAGE, ANALYZE_MESSAGE, RALPH_MESSAGE, } from "../installer/hooks.js";
 // Agent dashboard is used in pre/post-tool-use hot path
@@ -164,6 +165,19 @@ async function processKeywordDetector(input) {
     const sessionId = input.sessionId;
     const directory = resolveToWorktreeRoot(input.directory);
     const messages = [];
+    // Record prompt submission time in HUD state
+    try {
+        const hudState = readHudState(directory) || {
+            timestamp: new Date().toISOString(),
+            backgroundTasks: [],
+        };
+        hudState.lastPromptTimestamp = new Date().toISOString();
+        hudState.timestamp = new Date().toISOString();
+        writeHudState(hudState, directory);
+    }
+    catch {
+        // Silent failure - don't break keyword detection
+    }
     // Load config for task-size detection settings
     const config = loadConfig();
     const taskSizeConfig = config.taskSizeDetection ?? {};

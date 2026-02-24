@@ -31,6 +31,8 @@ export interface OmcHudState {
   sessionStartTimestamp?: string;
   /** Session ID that owns the persisted sessionStartTimestamp */
   sessionId?: string;
+  /** Timestamp of last user prompt submission (ISO 8601) */
+  lastPromptTimestamp?: string;
 }
 
 // ============================================================================
@@ -313,6 +315,9 @@ export interface HudRenderContext {
 
   /** Total Skill/proxy_Skill calls seen in transcript */
   skillCallCount: number;
+
+  /** Last prompt submission time (from HUD state) */
+  promptTime: Date | null;
 }
 
 // ============================================================================
@@ -381,6 +386,7 @@ export interface HudElementConfig {
   permissionStatus: boolean;  // Show pending permission indicator
   thinking: boolean;          // Show extended thinking indicator
   thinkingFormat: ThinkingFormat;  // Thinking indicator format
+  promptTime: boolean;        // Show last prompt submission time (HH:MM:SS)
   sessionHealth: boolean;     // Show session health/duration
   showSessionDuration?: boolean;  // Show session:19m duration display (default: true if sessionHealth is true)
   showHealthIndicator?: boolean;  // Show 🟢/🟡/🔴 health indicator (default: true if sessionHealth is true)
@@ -452,6 +458,7 @@ export const DEFAULT_HUD_CONFIG: HudConfig = {
     permissionStatus: false,  // Disabled: heuristic-based, causes false positives
     thinking: true,
     thinkingFormat: 'text',   // Text format for backward compatibility
+    promptTime: true,  // Show last prompt time by default
     sessionHealth: true,
     // showSessionDuration, showCostPerHour, showBudgetWarning: undefined = default to true
     useBars: false,  // Disabled by default for backwards compatibility
@@ -500,6 +507,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     permissionStatus: false,
     thinking: false,
     thinkingFormat: 'text',
+    promptTime: false,
     sessionHealth: false,
     useBars: false,
     showCache: false,
@@ -531,6 +539,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     permissionStatus: false,
     thinking: false,
     thinkingFormat: 'text',
+    promptTime: false,
     sessionHealth: false,
     useBars: false,
     showCache: true,
@@ -562,6 +571,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     permissionStatus: false,
     thinking: true,
     thinkingFormat: 'text',
+    promptTime: true,
     sessionHealth: true,
     useBars: true,
     showCache: true,
@@ -593,6 +603,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     permissionStatus: false,
     thinking: true,
     thinkingFormat: 'text',
+    promptTime: true,
     sessionHealth: true,
     useBars: true,
     showCache: true,
@@ -624,6 +635,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     permissionStatus: false,
     thinking: true,
     thinkingFormat: 'text',
+    promptTime: true,
     sessionHealth: true,
     useBars: false,
     showCache: true,
@@ -655,6 +667,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     permissionStatus: false,
     thinking: true,
     thinkingFormat: 'text',
+    promptTime: true,
     sessionHealth: true,
     useBars: true,
     showCache: true,

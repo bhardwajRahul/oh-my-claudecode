@@ -22,6 +22,8 @@ export interface OmcHudState {
     sessionStartTimestamp?: string;
     /** Session ID that owns the persisted sessionStartTimestamp */
     sessionId?: string;
+    /** Timestamp of last user prompt submission (ISO 8601) */
+    lastPromptTimestamp?: string;
 }
 export interface StatuslineStdin {
     /** Transcript path for parsing conversation history */
@@ -235,6 +237,8 @@ export interface HudRenderContext {
     agentCallCount: number;
     /** Total Skill/proxy_Skill calls seen in transcript */
     skillCallCount: number;
+    /** Last prompt submission time (from HUD state) */
+    promptTime: Date | null;
 }
 export type HudPreset = 'minimal' | 'focused' | 'full' | 'opencode' | 'dense' | 'analytics';
 /**
@@ -293,6 +297,7 @@ export interface HudElementConfig {
     permissionStatus: boolean;
     thinking: boolean;
     thinkingFormat: ThinkingFormat;
+    promptTime: boolean;
     sessionHealth: boolean;
     showSessionDuration?: boolean;
     showHealthIndicator?: boolean;

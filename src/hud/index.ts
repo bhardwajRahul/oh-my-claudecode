@@ -447,6 +447,9 @@ async function main(watchMode = false): Promise<void> {
       toolCallCount: transcriptData.toolCallCount,
       agentCallCount: transcriptData.agentCallCount,
       skillCallCount: transcriptData.skillCallCount,
+      promptTime: hudState?.lastPromptTimestamp
+        ? new Date(hudState.lastPromptTimestamp)
+        : null,
     };
 
     // Debug: log data if OMC_DEBUG is set

@@ -26,6 +26,7 @@ import {
   addBackgroundTask,
   getRunningTaskCount,
 } from "../hud/background-tasks.js";
+import { readHudState, writeHudState } from "../hud/state.js";
 import { loadConfig } from "../config/loader.js";
 import {
   ULTRAWORK_MESSAGE,
@@ -296,6 +297,19 @@ async function processKeywordDetector(input: HookInput): Promise<HookOutput> {
   const sessionId = input.sessionId;
   const directory = resolveToWorktreeRoot(input.directory);
   const messages: string[] = [];
+
+  // Record prompt submission time in HUD state
+  try {
+    const hudState = readHudState(directory) || {
+      timestamp: new Date().toISOString(),
+      backgroundTasks: [],
+    };
+    hudState.lastPromptTimestamp = new Date().toISOString();
+    hudState.timestamp = new Date().toISOString();
+    writeHudState(hudState, directory);
+  } catch {
+    // Silent failure - don't break keyword detection
+  }
 
   // Load config for task-size detection settings
   const config = loadConfig();
