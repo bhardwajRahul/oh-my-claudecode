@@ -415,19 +415,27 @@ export function isTaskRetryExhausted(
 
 /** List all task IDs in a team directory, sorted ascending */
 export function listTaskIds(teamName: string, opts?: { cwd?: string }): string[] {
-  const dir = canonicalTasksDir(teamName, opts?.cwd);
-  if (!existsSync(dir)) return [];
-  try {
-    return readdirSync(dir)
-      .filter(f => f.endsWith('.json') && !f.includes('.tmp.') && !f.includes('.failure.'))
-      .map(f => f.replace('.json', ''))
-      .sort((a, b) => {
-        const numA = parseInt(a, 10);
-        const numB = parseInt(b, 10);
-        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-        return a.localeCompare(b);
-      });
-  } catch {
-    return [];
+  const scanDir = (dir: string): string[] => {
+    if (!existsSync(dir)) return [];
+    try {
+      return readdirSync(dir)
+        .filter(f => f.endsWith('.json') && !f.includes('.tmp.') && !f.includes('.failure.') && !f.endsWith('.lock'))
+        .map(f => f.replace('.json', ''));
+    } catch {
+      return [];
+    }
+  };
+
+  // Check canonical path first, fall back to legacy if empty
+  let ids = scanDir(canonicalTasksDir(teamName, opts?.cwd));
+  if (ids.length === 0) {
+    ids = scanDir(legacyTasksDir(teamName));
   }
+
+  return ids.sort((a, b) => {
+    const numA = parseInt(a, 10);
+    const numB = parseInt(b, 10);
+    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+    return a.localeCompare(b);
+  });
 }
