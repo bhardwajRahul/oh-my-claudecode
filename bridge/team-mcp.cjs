@@ -17824,7 +17824,7 @@ var startSchema = external_exports.object({
     description: external_exports.string().describe("Full task description")
   })).describe("Tasks to distribute to workers"),
   cwd: external_exports.string().describe("Working directory (absolute path)"),
-  timeoutSeconds: external_exports.number().optional().describe("Timeout in seconds (default: 300)")
+  timeoutSeconds: external_exports.number().optional().describe("Optional runtime timeout in seconds (default: 0 = no implicit runtime timeout; set explicitly to enforce one)")
 });
 var statusSchema = external_exports.object({
   job_id: external_exports.string().describe("Job ID returned by omc_run_team_start")
@@ -17964,7 +17964,7 @@ var TOOLS = [
           description: "Tasks to distribute to workers"
         },
         cwd: { type: "string", description: "Working directory (absolute path)" },
-        timeoutSeconds: { type: "number", description: "Timeout in seconds (default: 300)" }
+        timeoutSeconds: { type: "number", description: "Optional runtime timeout in seconds (default: 0 = no implicit runtime timeout; set explicitly to enforce one)" }
       },
       required: ["teamName", "agentTypes", "tasks", "cwd"]
     }

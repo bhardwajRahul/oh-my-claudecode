@@ -86,7 +86,7 @@ const startSchema = z.object({
     description: z.string().describe('Full task description'),
   })).describe('Tasks to distribute to workers'),
   cwd: z.string().describe('Working directory (absolute path)'),
-  timeoutSeconds: z.number().optional().describe('Timeout in seconds (default: 300)'),
+  timeoutSeconds: z.number().optional().describe('Optional runtime timeout in seconds (default: 0 = no implicit runtime timeout; set explicitly to enforce one)'),
 });
 
 const statusSchema = z.object({
@@ -247,7 +247,7 @@ const TOOLS = [
           description: 'Tasks to distribute to workers',
         },
         cwd: { type: 'string', description: 'Working directory (absolute path)' },
-        timeoutSeconds: { type: 'number', description: 'Timeout in seconds (default: 300)' },
+        timeoutSeconds: { type: 'number', description: 'Optional runtime timeout in seconds (default: 0 = no implicit runtime timeout; set explicitly to enforce one)' },
       },
       required: ['teamName', 'agentTypes', 'tasks', 'cwd'],
     },
