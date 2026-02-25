@@ -366,6 +366,15 @@ async function processKeywordDetector(input: HookInput): Promise<HookOutput> {
     messages.push(PROMPT_TRANSLATION_MESSAGE);
   }
 
+  // Wake OpenClaw gateway for keyword-detector (non-blocking, fires for all prompts)
+  if (input.sessionId) {
+    _openclaw.wake("keyword-detector", {
+      sessionId: input.sessionId,
+      projectPath: directory,
+      prompt: cleanedText,
+    });
+  }
+
   if (keywords.length === 0) {
     if (messages.length > 0) {
       return { continue: true, message: messages.join('\n\n---\n\n') };
@@ -625,6 +634,8 @@ async function processPersistentMode(input: HookInput): Promise<HookOutput> {
               profileName: process.env.OMC_NOTIFY_PROFILE,
             }).catch(() => {})
           ).catch(() => {});
+          // Wake OpenClaw gateway for stop event (non-blocking)
+          _openclaw.wake("stop", { sessionId, projectPath: directory });
         }
       }
 
@@ -692,6 +703,8 @@ async function processSessionStart(input: HookInput): Promise<HookOutput> {
         profileName: process.env.OMC_NOTIFY_PROFILE,
       }).catch(() => {})
     ).catch(() => {});
+    // Wake OpenClaw gateway for session-start (non-blocking)
+    _openclaw.wake("session-start", { sessionId, projectPath: directory });
   }
 
   // Start reply listener daemon if configured (non-blocking, swallows errors)
@@ -892,6 +905,23 @@ export const _notify = {
 };
 
 /**
+ * @internal Object wrapper for OpenClaw gateway dispatch.
+ * Mirrors the _notify pattern for testability (tests spy on _openclaw.wake
+ * instead of mocking dynamic imports).
+ *
+ * Fire-and-forget: the lazy import + double .catch() ensures OpenClaw
+ * never blocks hooks or surfaces errors.
+ */
+export const _openclaw = {
+  wake: (event: import("../openclaw/types.js").OpenClawHookEvent, context: import("../openclaw/types.js").OpenClawContext) => {
+    if (process.env.OMC_OPENCLAW !== "1") return;
+    import("../openclaw/index.js").then(({ wakeOpenClaw }) =>
+      wakeOpenClaw(event, context).catch(() => {})
+    ).catch(() => {});
+  },
+};
+
+/**
  * Process pre-tool-use hook
  * Checks delegation enforcement and tracks background tasks
  */
@@ -919,6 +949,15 @@ function processPreToolUse(input: HookInput): HookOutput {
   // Fire-and-forget: notify users that input is needed BEFORE the tool blocks
   if (input.toolName === "AskUserQuestion" && input.sessionId) {
     _notify.askUserQuestion(input.sessionId, directory, input.toolInput);
+    // Wake OpenClaw gateway for ask-user-question (non-blocking)
+    _openclaw.wake("ask-user-question", {
+      sessionId: input.sessionId,
+      projectPath: directory,
+      question: (() => {
+        const ti = input.toolInput as { questions?: Array<{ question?: string }> } | undefined;
+        return ti?.questions?.map(q => q.question || "").filter(Boolean).join("; ") || "";
+      })(),
+    });
   }
 
   // Notify when a new agent is spawned via Task tool (issue #761)
@@ -1043,6 +1082,15 @@ function processPreToolUse(input: HookInput): HookOutput {
     }
   }
 
+  // Wake OpenClaw gateway for pre-tool-use (non-blocking, fires only for allowed tools)
+  if (input.sessionId) {
+    _openclaw.wake("pre-tool-use", {
+      sessionId: input.sessionId,
+      projectPath: directory,
+      toolName: input.toolName,
+    });
+  }
+
   return {
     continue: true,
     ...(enforcementResult.message ? { message: enforcementResult.message } : {}),
@@ -1118,6 +1166,15 @@ async function processPostToolUse(input: HookInput): Promise<HookOutput> {
     if (dashboard) {
       messages.push(dashboard);
     }
+  }
+
+  // Wake OpenClaw gateway for post-tool-use (non-blocking, fires for all tools)
+  if (input.sessionId) {
+    _openclaw.wake("post-tool-use", {
+      sessionId: input.sessionId,
+      projectPath: directory,
+      toolName: input.toolName,
+    });
   }
 
   if (messages.length > 0) {
