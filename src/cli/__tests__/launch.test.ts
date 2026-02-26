@@ -25,7 +25,7 @@ vi.mock('../tmux-utils.js', () => ({
   isClaudeAvailable: vi.fn(() => true),
 }));
 
-import { runClaude, launchCommand, extractNotifyFlag, extractOpenClawFlag, extractTelegramFlag, extractDiscordFlag, extractSlackFlag, extractWebhookFlag, normalizeClaudeLaunchArgs } from '../launch.js';
+import { runClaude, launchCommand, extractNotifyFlag, extractOpenClawFlag, extractTelegramFlag, extractDiscordFlag, extractSlackFlag, extractWebhookFlag, extractWorktreeFlag, normalizeClaudeLaunchArgs } from '../launch.js';
 import {
   resolveLaunchPolicy,
   buildTmuxShellCommand,
@@ -783,6 +783,129 @@ describe('launchCommand — env var propagation', () => {
     expect(claudeArgs).not.toContain('--slack');
     expect(claudeArgs).not.toContain('--webhook');
     expect(claudeArgs).not.toContain('--openclaw');
+    expect(claudeArgs).toContain('--print');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractWorktreeFlag (uses --wt to avoid collision with Claude CLI's --worktree)
+// ---------------------------------------------------------------------------
+describe('extractWorktreeFlag', () => {
+  it('returns worktreeEnabled=false when no flag is present', () => {
+    const result = extractWorktreeFlag(['--madmax']);
+    expect(result.worktreeEnabled).toBe(false);
+    expect(result.remainingArgs).toEqual(['--madmax']);
+  });
+
+  it('enables worktree with bare --wt flag', () => {
+    const result = extractWorktreeFlag(['--wt']);
+    expect(result.worktreeEnabled).toBe(true);
+    expect(result.remainingArgs).toEqual([]);
+  });
+
+  it('enables worktree with --wt=true', () => {
+    const result = extractWorktreeFlag(['--wt=true']);
+    expect(result.worktreeEnabled).toBe(true);
+    expect(result.remainingArgs).toEqual([]);
+  });
+
+  it('disables worktree with --wt=false', () => {
+    const result = extractWorktreeFlag(['--wt=false']);
+    expect(result.worktreeEnabled).toBe(false);
+    expect(result.remainingArgs).toEqual([]);
+  });
+
+  it('enables worktree with --wt=1', () => {
+    const result = extractWorktreeFlag(['--wt=1']);
+    expect(result.worktreeEnabled).toBe(true);
+    expect(result.remainingArgs).toEqual([]);
+  });
+
+  it('disables worktree with --wt=0', () => {
+    const result = extractWorktreeFlag(['--wt=0']);
+    expect(result.worktreeEnabled).toBe(false);
+    expect(result.remainingArgs).toEqual([]);
+  });
+
+  it('strips --wt from remainingArgs', () => {
+    const result = extractWorktreeFlag(['--madmax', '--wt', '--print']);
+    expect(result.worktreeEnabled).toBe(true);
+    expect(result.remainingArgs).toEqual(['--madmax', '--print']);
+  });
+
+  it('bare --wt does NOT consume the next positional arg', () => {
+    const result = extractWorktreeFlag(['--wt', 'myfile.txt']);
+    expect(result.worktreeEnabled).toBe(true);
+    expect(result.remainingArgs).toEqual(['myfile.txt']);
+  });
+
+  it('returns worktreeEnabled=false for empty args', () => {
+    const result = extractWorktreeFlag([]);
+    expect(result.worktreeEnabled).toBe(false);
+    expect(result.remainingArgs).toEqual([]);
+  });
+
+  it('does NOT intercept Claude CLI --worktree flag', () => {
+    const result = extractWorktreeFlag(['--worktree', 'myname']);
+    expect(result.worktreeEnabled).toBe(false);
+    expect(result.remainingArgs).toEqual(['--worktree', 'myname']);
+  });
+
+  it('does NOT intercept Claude CLI -w flag', () => {
+    const result = extractWorktreeFlag(['-w', 'myname']);
+    expect(result.worktreeEnabled).toBe(false);
+    expect(result.remainingArgs).toEqual(['-w', 'myname']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// launchCommand — worktree flag env var propagation
+// ---------------------------------------------------------------------------
+describe('launchCommand — worktree flag', () => {
+  let processExitSpy: ReturnType<typeof vi.spyOn>;
+  const savedWorktree = process.env.OMC_WORKTREE;
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    processExitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+    delete process.env.OMC_WORKTREE;
+    delete process.env.CLAUDECODE;
+    (execFileSync as ReturnType<typeof vi.fn>).mockReturnValue(Buffer.from(''));
+    (resolveLaunchPolicy as ReturnType<typeof vi.fn>).mockReturnValue('direct');
+  });
+
+  afterEach(() => {
+    processExitSpy.mockRestore();
+    if (savedWorktree !== undefined) {
+      process.env.OMC_WORKTREE = savedWorktree;
+    } else {
+      delete process.env.OMC_WORKTREE;
+    }
+  });
+
+  it('--wt sets OMC_WORKTREE to 1', async () => {
+    await launchCommand(['--wt']);
+    expect(process.env.OMC_WORKTREE).toBe('1');
+  });
+
+  it('--wt is stripped from args passed to Claude', async () => {
+    await launchCommand(['--wt', '--print']);
+    const calls = vi.mocked(execFileSync).mock.calls;
+    const claudeCall = calls.find(([cmd]) => cmd === 'claude');
+    expect(claudeCall).toBeDefined();
+    const claudeArgs = claudeCall![1] as string[];
+    expect(claudeArgs).not.toContain('--wt');
+    expect(claudeArgs).toContain('--print');
+  });
+
+  it('Claude --worktree flag passes through to Claude unmodified', async () => {
+    await launchCommand(['--worktree', 'myname', '--print']);
+    const calls = vi.mocked(execFileSync).mock.calls;
+    const claudeCall = calls.find(([cmd]) => cmd === 'claude');
+    expect(claudeCall).toBeDefined();
+    const claudeArgs = claudeCall![1] as string[];
+    expect(claudeArgs).toContain('--worktree');
+    expect(claudeArgs).toContain('myname');
     expect(claudeArgs).toContain('--print');
   });
 });
