@@ -550,6 +550,7 @@ export async function teleportListCommand(options: { json?: boolean }): Promise<
 
 /**
  * Remove a worktree
+ * Returns 0 on success, 1 on failure.
  */
 export async function teleportRemoveCommand(
   pathOrName: string,
