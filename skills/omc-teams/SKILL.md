@@ -75,7 +75,7 @@ stopping prematurely after MCP tool calls return. The persistent-mode Stop hook 
 `team-state.json` to know whether to block the stop or allow it.
 
 ```
-state_write(mode="omc-teams", current_phase="team-exec", active=true)
+state_write(mode="team", current_phase="team-exec", active=true)
 ```
 
 Then call `mcp__team__omc_run_team_start` — it spawns workers in the background and returns a
@@ -150,7 +150,7 @@ Report results to the user. For `failed` or wait-timeout errors, explain what ha
 
 Update OMC state:
 ```
-state_write(mode="omc-teams", current_phase="completed", active=false)
+state_write(mode="team", current_phase="completed", active=false)
 ```
 
 ---

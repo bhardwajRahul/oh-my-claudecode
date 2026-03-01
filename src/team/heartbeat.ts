@@ -12,7 +12,7 @@ import { readFileSync, existsSync, readdirSync, unlinkSync, rmdirSync } from 'fs
 import { join } from 'path';
 import type { HeartbeatData } from './types.js';
 import { sanitizeName } from './tmux-session.js';
-import { atomicWriteJson, validateResolvedPath } from './fs-utils.js';
+import { atomicWriteJson } from './fs-utils.js';
 
 /** Heartbeat file path */
 function heartbeatPath(workingDirectory: string, teamName: string, workerName: string): string {
@@ -62,12 +62,9 @@ export function listHeartbeats(
     const heartbeats: HeartbeatData[] = [];
     for (const file of files) {
       try {
-        const filePath = join(dir, file);
-        // Validate file path stays within heartbeat directory
-        validateResolvedPath(filePath, dir);
-        const raw = readFileSync(filePath, 'utf-8');
+        const raw = readFileSync(join(dir, file), 'utf-8');
         heartbeats.push(JSON.parse(raw) as HeartbeatData);
-      } catch { /* skip malformed or invalid path */ }
+      } catch { /* skip malformed */ }
     }
     return heartbeats;
   } catch {
@@ -121,12 +118,7 @@ export function cleanupTeamHeartbeats(
   try {
     const files = readdirSync(dir);
     for (const file of files) {
-      try {
-        const filePath = join(dir, file);
-        // Validate file path stays within heartbeat directory
-        validateResolvedPath(filePath, dir);
-        unlinkSync(filePath);
-      } catch { /* ignore invalid path or deletion failure */ }
+      try { unlinkSync(join(dir, file)); } catch { /* ignore */ }
     }
     // Try to remove the directory itself
     try {

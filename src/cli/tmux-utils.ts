@@ -55,20 +55,9 @@ export function resolveLaunchPolicy(env: NodeJS.ProcessEnv = process.env): Claud
  * Build tmux session name from directory, git branch, and UTC timestamp
  * Format: omc-{dir}-{branch}-{utctimestamp}
  * e.g.  omc-myproject-dev-20260221143052
- *
- * When worktree option is enabled, uses last 2 path segments instead of
- * just the basename, so worktree paths like ~/omc-worktrees/feat/issue-42
- * produce "omc-feat-issue-42-..." instead of generic "omc-issue-42-...".
  */
-export function buildTmuxSessionName(cwd: string, options?: { worktree?: boolean }): string {
-  let dirToken: string;
-  if (options?.worktree) {
-    const parts = cwd.replace(/\/+$/, '').split('/').filter(Boolean);
-    const meaningful = parts.slice(-2).join('/');
-    dirToken = sanitizeTmuxToken(meaningful);
-  } else {
-    dirToken = sanitizeTmuxToken(basename(cwd));
-  }
+export function buildTmuxSessionName(cwd: string): string {
+  const dirToken = sanitizeTmuxToken(basename(cwd));
   let branchToken = 'detached';
 
   try {
@@ -108,31 +97,6 @@ export function sanitizeTmuxToken(value: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
   return cleaned || 'unknown';
-}
-
-/**
- * Wrap a shell command to run inside a login shell, ensuring the user's
- * shell rc files (.zshrc, .bashrc, etc.) are sourced.
- *
- * When tmux creates a pane with an explicit command, it uses a non-login
- * shell ($SHELL -c 'command'), so rc files are not loaded. This wrapper
- * replaces the outer shell with a login shell via exec, ensuring PATH
- * and other environment from rc files are available.
- *
- * Note: `-lc` alone starts a login+non-interactive shell which sources
- * .zprofile/.bash_profile but NOT .zshrc/.bashrc (those require an
- * interactive shell). We explicitly source the rc file so that PATH
- * and user environment are fully available.
- */
-export function wrapWithLoginShell(command: string): string {
-  const shell = process.env.SHELL || '/bin/bash';
-  const shellName = basename(shell).replace(/\.(exe|cmd|bat)$/i, '');
-  const home = process.env.HOME || '';
-  const rcFile = home ? `${home}/.${shellName}rc` : '';
-  const sourceRc = rcFile
-    ? `[ -f ${quoteShellArg(rcFile)} ] && . ${quoteShellArg(rcFile)}; `
-    : '';
-  return `exec ${quoteShellArg(shell)} -lc ${quoteShellArg(sourceRc + command)}`;
 }
 
 /**
@@ -213,7 +177,7 @@ export function createHudWatchPane(cwd: string, hudCmd: string): string | null {
   try {
     const output = execFileSync(
       'tmux',
-      ['split-window', '-v', '-l', '4', '-d', '-c', cwd, '-P', '-F', '#{pane_id}', wrapWithLoginShell(hudCmd)],
+      ['split-window', '-v', '-l', '4', '-d', '-c', cwd, '-P', '-F', '#{pane_id}', hudCmd],
       { encoding: 'utf-8' }
     );
     const paneId = output.split('\n')[0]?.trim() || '';

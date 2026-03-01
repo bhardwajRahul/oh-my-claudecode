@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { tmpdir } from 'os';
+import { tmpdir, homedir } from 'os';
 import { getTeamMembers } from '../unified-team.js';
 import { registerMcpWorker } from '../team-registration.js';
 import { writeHeartbeat } from '../heartbeat.js';

@@ -1,4 +1,6 @@
-import { writeModeState, readModeState, clearModeStateFile } from '../../lib/mode-state-io.js';
+import { existsSync, readFileSync, unlinkSync } from 'fs';
+import { atomicWriteJsonSync } from '../../lib/atomic-write.js';
+import { ensureSessionStateDir, resolveSessionStatePath } from '../../lib/worktree-paths.js';
 import type {
   TeamPipelineState,
   TeamPipelinePhase,
@@ -9,6 +11,13 @@ import { TEAM_PIPELINE_SCHEMA_VERSION } from './types.js';
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function getTeamStatePath(directory: string, sessionId?: string): string {
+  if (!sessionId) {
+    return `${directory}/.omc/state/team-state.json`;
+  }
+  return resolveSessionStatePath('team', sessionId, directory);
 }
 
 export function initTeamPipelineState(
@@ -60,9 +69,20 @@ export function readTeamPipelineState(directory: string, sessionId?: string): Te
     return null;
   }
 
-  const state = readModeState<TeamPipelineState>('team', directory, sessionId);
-  if (!state || typeof state !== 'object') return null;
-  return state;
+  const statePath = getTeamStatePath(directory, sessionId);
+  if (!existsSync(statePath)) {
+    return null;
+  }
+
+  try {
+    const content = readFileSync(statePath, 'utf-8');
+    const state = JSON.parse(content) as TeamPipelineState;
+    if (!state || typeof state !== 'object') return null;
+    if (state.session_id && state.session_id !== sessionId) return null;
+    return state;
+  } catch {
+    return null;
+  }
 }
 
 export function writeTeamPipelineState(directory: string, state: TeamPipelineState, sessionId?: string): boolean {
@@ -70,14 +90,21 @@ export function writeTeamPipelineState(directory: string, state: TeamPipelineSta
     return false;
   }
 
-  const next: TeamPipelineState = {
-    ...state,
-    session_id: sessionId,
-    mode: 'team',
-    schema_version: TEAM_PIPELINE_SCHEMA_VERSION,
-    updated_at: nowIso(),
-  };
-  return writeModeState('team', next as unknown as Record<string, unknown>, directory, sessionId);
+  try {
+    ensureSessionStateDir(sessionId, directory);
+    const statePath = getTeamStatePath(directory, sessionId);
+    const next: TeamPipelineState = {
+      ...state,
+      session_id: sessionId,
+      mode: 'team',
+      schema_version: TEAM_PIPELINE_SCHEMA_VERSION,
+      updated_at: nowIso(),
+    };
+    atomicWriteJsonSync(statePath, next);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function clearTeamPipelineState(directory: string, sessionId?: string): boolean {
@@ -85,7 +112,15 @@ export function clearTeamPipelineState(directory: string, sessionId?: string): b
     return false;
   }
 
-  return clearModeStateFile('team', directory, sessionId);
+  const statePath = getTeamStatePath(directory, sessionId);
+  try {
+    if (existsSync(statePath)) {
+      unlinkSync(statePath);
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function markTeamPhase(

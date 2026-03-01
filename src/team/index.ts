@@ -43,11 +43,7 @@ export {
   isSessionAlive,
   listActiveSessions,
   spawnBridgeInSession,
-  shouldLoadShellRc,
-  validateCliBinaryPath,
 } from './tmux-session.js';
-
-export type { CliBinaryValidation } from './tmux-session.js';
 
 export {
   appendOutbox,
@@ -191,7 +187,7 @@ export {
 
 // cli-detection: only export symbols not already covered by model-contract
 export type { CliInfo } from './cli-detection.js';
-export { detectCli, detectAllClis, resolveCliBinaryPath, clearResolvedPathCache } from './cli-detection.js';
+export { detectCli, detectAllClis } from './cli-detection.js';
 
 // worker-bootstrap
 export type { WorkerBootstrapParams } from './worker-bootstrap.js';
@@ -226,9 +222,6 @@ export type {
   WatchdogCompletionEvent,
 } from './runtime.js';
 export { startTeam, monitorTeam, assignTask, shutdownTeam, resumeTeam, watchdogCliWorkers } from './runtime.js';
-
-export { LayoutStabilizer } from './layout-stabilizer.js';
-export type { LayoutStabilizerOptions } from './layout-stabilizer.js';
 
 export { injectToLeaderPane } from './tmux-session.js';
 

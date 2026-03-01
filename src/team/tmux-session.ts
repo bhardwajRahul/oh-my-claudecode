@@ -17,18 +17,6 @@ const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
 const TMUX_SESSION_PREFIX = 'omc-team';
 
-/**
- * Known CLI binary names used in team mode workers.
- * Used by validateCliBinaryPath() to scope validation to expected binaries.
- */
-const KNOWN_CLI_BINARIES = new Set(['claude', 'codex', 'gemini', 'node']);
-
-/**
- * Directories considered suspicious for CLI binary resolution.
- * Binaries resolved to these paths trigger a validation warning.
- */
-const SUSPICIOUS_PATH_PREFIXES = ['/tmp/', '/var/tmp/', '/dev/shm/'];
-
 const promisifiedExec = promisify(exec);
 const promisifiedExecFile = promisify(execFile);
 
@@ -96,87 +84,6 @@ function assertSafeEnvKey(key: string): void {
   }
 }
 
-/**
- * Trust boundary: shell rc loading in worker contexts.
- *
- * Workers run with the user's shell environment by design. Shell rc files
- * (.bashrc/.zshrc) are sourced to resolve PATH and ensure CLI binaries
- * (claude, codex, gemini) are discoverable.
- *
- * However, rc files may contain arbitrary code that:
- * - Modifies PATH (could shadow expected binaries)
- * - Sets unexpected environment variables
- * - Defines shell functions (mitigated by exec "$@" pattern)
- *
- * Set OMC_TEAM_NO_RC=1 to skip rc file loading entirely.
- * When disabled, PATH must already contain the required CLI binaries.
- */
-export function shouldLoadShellRc(): boolean {
-  const val = process.env.OMC_TEAM_NO_RC;
-  return !(val === '1' || val === 'true');
-}
-
-export interface CliBinaryValidation {
-  binary: string;
-  resolvedPath: string | null;
-  isValid: boolean;
-  warnings: string[];
-}
-
-/**
- * Validate that a CLI binary resolves to a trusted path.
- *
- * Checks that the binary exists in PATH and doesn't resolve to a suspicious
- * location (e.g. /tmp/, /var/tmp/). This guards against rc files or PATH
- * manipulation redirecting expected binaries to untrusted replacements.
- *
- * Returns validation result with warnings. Does not throw — callers decide
- * how to handle validation failures.
- */
-export function validateCliBinaryPath(binary: string): CliBinaryValidation {
-  const result: CliBinaryValidation = {
-    binary,
-    resolvedPath: null,
-    isValid: true,
-    warnings: [],
-  };
-
-  if (!KNOWN_CLI_BINARIES.has(binary)) {
-    return result;
-  }
-
-  try {
-    const whichResult = execFileSync('which', [binary], {
-      encoding: 'utf-8',
-      timeout: 5000,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim();
-
-    result.resolvedPath = whichResult;
-
-    for (const prefix of SUSPICIOUS_PATH_PREFIXES) {
-      if (whichResult.startsWith(prefix)) {
-        result.isValid = false;
-        result.warnings.push(
-          `CLI binary '${binary}' resolved to suspicious path: ${whichResult}`
-        );
-      }
-    }
-
-    if (whichResult.includes('..')) {
-      result.isValid = false;
-      result.warnings.push(
-        `CLI binary '${binary}' resolved path contains traversal: ${whichResult}`
-      );
-    }
-  } catch {
-    result.resolvedPath = null;
-    result.warnings.push(`CLI binary '${binary}' not found in PATH`);
-  }
-
-  return result;
-}
-
 function getLaunchWords(config: WorkerPaneConfig): string[] {
   if (config.launchBinary) {
     return [config.launchBinary, ...(config.launchArgs ?? [])];
@@ -212,19 +119,10 @@ export function buildWorkerStartCommand(config: WorkerPaneConfig): string {
     });
 
     const shellName = shellNameFromPath(shell) || 'bash';
-    const loadRc = shouldLoadShellRc();
-    const rcFile = loadRc && process.env.HOME ? `${process.env.HOME}/.${shellName}rc` : '';
-
-    // Build shell script: optionally source rc, log binary resolution, then exec.
-    // The exec "$@" pattern bypasses aliases/functions (trust boundary mitigation).
-    const parts: string[] = [];
-    if (rcFile) {
-      parts.push(`[ -f ${shellEscape(rcFile)} ] && . ${shellEscape(rcFile)}`);
-    }
-    // Log resolved binary path for debugging (trust boundary audit trail)
-    parts.push('_omc_p=$(command -v "$1" 2>/dev/null); printf "[omc-team] %s -> %s\\n" "$1" "$_omc_p" >&2');
-    parts.push('exec "$@"');
-    const script = parts.join('; ');
+    const rcFile = process.env.HOME ? `${process.env.HOME}/.${shellName}rc` : '';
+    const script = rcFile
+      ? `[ -f ${shellEscape(rcFile)} ] && . ${shellEscape(rcFile)}; exec "$@"`
+      : 'exec "$@"';
 
     return [
       'env',
@@ -245,8 +143,7 @@ export function buildWorkerStartCommand(config: WorkerPaneConfig): string {
     .join(' ');
 
   const shellName = shellNameFromPath(shell) || 'bash';
-  const loadRc = shouldLoadShellRc();
-  const rcFile = loadRc && process.env.HOME ? `${process.env.HOME}/.${shellName}rc` : '';
+  const rcFile = process.env.HOME ? `${process.env.HOME}/.${shellName}rc` : '';
   // Quote rcFile to prevent shell injection if HOME contains metacharacters
   const sourceCmd = rcFile ? `[ -f "${rcFile}" ] && source "${rcFile}"; ` : '';
 
@@ -380,75 +277,41 @@ export async function createTeamSession(
   const { promisify } = await import('util');
   const execFileAsync = promisify(execFile);
 
-  let sessionAndWindow = '';
-  let leaderPaneId = '';
-
   if (!process.env.TMUX) {
-    // Auto-create a detached tmux session when not running inside tmux.
-    // This allows team tools to work when Claude Code is launched directly
-    // from the terminal without omc CLI (issue #1085).
-    validateTmux();
+    throw new Error('Team mode requires running inside tmux. Start one: tmux new-session');
+  }
 
-    const sName = `${TMUX_SESSION_PREFIX}-${sanitizeName(teamName)}`;
+  // Prefer the invoking pane from environment to avoid focus races when users
+  // switch tmux windows during startup (issue #966).
+  const envPaneIdRaw = (process.env.TMUX_PANE ?? '').trim();
+  const envPaneId = /^%\d+$/.test(envPaneIdRaw) ? envPaneIdRaw : '';
+  let sessionAndWindow = '';
+  let leaderPaneId = envPaneId;
 
-    // Kill stale session with same name if present.
-    // Note: concurrent calls with the same teamName could race here — the second
-    // call would kill the session the first just created. This is acceptable since
-    // concurrent identical teamName usage is an unusual pattern.
+  if (envPaneId) {
     try {
-      execFileSync('tmux', ['kill-session', '-t', sName], { stdio: 'pipe', timeout: 5000 });
-    } catch { /* session may not exist */ }
-
-    // Create detached session with reasonable terminal size
-    const newArgs = ['new-session', '-d', '-s', sName, '-x', '200', '-y', '50'];
-    if (cwd) newArgs.push('-c', cwd);
-    execFileSync('tmux', newArgs, { stdio: 'pipe', timeout: 5000 });
-
-    // Resolve the pane ID of the initial pane
-    const paneResult = await tmuxAsync([
-      'display-message', '-t', sName, '-p', '#{pane_id}'
-    ]);
-    leaderPaneId = paneResult.stdout.trim();
-    if (!leaderPaneId || !/^%\d+$/.test(leaderPaneId)) {
-      throw new Error(`Failed to resolve pane ID for auto-created tmux session "${sName}"`);
-    }
-
-    // Use bare session name (no ':window' suffix) so killTeamSession
-    // kills the entire auto-created session on cleanup.
-    sessionAndWindow = sName;
-  } else {
-    // Running inside tmux — resolve from current session context.
-    // Prefer the invoking pane from environment to avoid focus races when users
-    // switch tmux windows during startup (issue #966).
-    const envPaneIdRaw = (process.env.TMUX_PANE ?? '').trim();
-    const envPaneId = /^%\d+$/.test(envPaneIdRaw) ? envPaneIdRaw : '';
-    leaderPaneId = envPaneId;
-
-    if (envPaneId) {
-      try {
-        const targetedContextResult = await execFileAsync('tmux', [
-          'display-message', '-p', '-t', envPaneId, '#S:#I'
-        ]);
-        sessionAndWindow = targetedContextResult.stdout.trim();
-      } catch {
-        sessionAndWindow = '';
-        leaderPaneId = '';
-      }
-    }
-
-    if (!sessionAndWindow || !leaderPaneId) {
-      // Fallback when TMUX_PANE is unavailable/invalid.
-      const contextResult = await tmuxAsync([
-        'display-message', '-p', '#S:#I #{pane_id}'
+      const targetedContextResult = await execFileAsync('tmux', [
+        'display-message', '-p', '-t', envPaneId, '#S:#I'
       ]);
-      const contextLine = contextResult.stdout.trim();
-      const contextMatch = contextLine.match(/^(\S+)\s+(%\d+)$/);
-      if (!contextMatch) {
-        throw new Error(`Failed to resolve tmux context: "${contextLine}"`);
-      }
-      sessionAndWindow = contextMatch[1];
-      leaderPaneId = contextMatch[2];
+      sessionAndWindow = targetedContextResult.stdout.trim();
+    } catch {
+      sessionAndWindow = '';
+      leaderPaneId = '';
     }
+  }
+
+  if (!sessionAndWindow || !leaderPaneId) {
+    // Fallback when TMUX_PANE is unavailable/invalid.
+    const contextResult = await tmuxAsync([
+      'display-message', '-p', '#S:#I #{pane_id}'
+    ]);
+    const contextLine = contextResult.stdout.trim();
+    const contextMatch = contextLine.match(/^(\S+)\s+(%\d+)$/);
+    if (!contextMatch) {
+      throw new Error(`Failed to resolve tmux context: "${contextLine}"`);
+    }
+    sessionAndWindow = contextMatch[1];
+    leaderPaneId = contextMatch[2];
   }
 
   const teamTarget = sessionAndWindow; // "session:window" form
@@ -520,83 +383,6 @@ export async function createTeamSession(
   return { sessionName: teamTarget, leaderPaneId, workerPaneIds };
 }
 
-export interface WaitForShellReadyOptions {
-  /** Maximum time to wait in ms (default: 10_000). Override via OMC_SHELL_READY_TIMEOUT_MS env var. */
-  timeoutMs?: number;
-  /** Initial polling interval in ms (default: 200). Increases with progressive backoff. */
-  intervalMs?: number;
-  /** Regex pattern to detect shell prompt (default: common prompt chars) */
-  promptPattern?: RegExp;
-}
-
-const DEFAULT_PROMPT_PATTERN = /[$#%>❯›]\s*$/m;
-
-/** Maximum backoff interval ceiling in ms */
-const MAX_BACKOFF_INTERVAL_MS = 2000;
-
-/** Backoff multiplier applied each poll iteration */
-const BACKOFF_MULTIPLIER = 1.5;
-
-/**
- * Resolve the effective timeout for shell-readiness wait.
- * Priority: opts.timeoutMs > OMC_SHELL_READY_TIMEOUT_MS env > 10_000 default.
- */
-function resolveShellReadyTimeout(optsTimeoutMs: number | undefined): number {
-  if (optsTimeoutMs !== undefined) return optsTimeoutMs;
-  const envVal = process.env.OMC_SHELL_READY_TIMEOUT_MS;
-  if (envVal) {
-    const parsed = parseInt(envVal, 10);
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  }
-  return 10_000;
-}
-
-/**
- * Poll tmux capture-pane until a shell prompt character is detected,
- * indicating the shell in the pane is ready to receive input.
- *
- * Uses progressive backoff: starts at `intervalMs` and increases by 1.5x
- * each iteration up to a 2s ceiling, reducing unnecessary polling.
- *
- * Resolves `true` when prompt is detected, `false` on timeout.
- * Logs a warning on timeout for operational visibility.
- */
-export async function waitForShellReady(
-  paneId: string,
-  opts: WaitForShellReadyOptions = {}
-): Promise<boolean> {
-  const timeoutMs = resolveShellReadyTimeout(opts.timeoutMs);
-  const {
-    intervalMs = 200,
-    promptPattern = DEFAULT_PROMPT_PATTERN,
-  } = opts;
-
-  const { execFile } = await import('child_process');
-  const { promisify } = await import('util');
-  const execFileAsync = promisify(execFile);
-
-  const deadline = Date.now() + timeoutMs;
-  let currentInterval = intervalMs;
-  while (Date.now() < deadline) {
-    try {
-      const content = await capturePaneAsync(paneId, execFileAsync as never);
-      if (promptPattern.test(content)) {
-        return true;
-      }
-    } catch {
-      // pane may not exist yet; keep polling
-    }
-    await sleep(Math.min(currentInterval, deadline - Date.now()));
-    currentInterval = Math.min(currentInterval * BACKOFF_MULTIPLIER, MAX_BACKOFF_INTERVAL_MS);
-  }
-
-  console.warn(
-    `[tmux-session] waitForShellReady: timed out after ${timeoutMs}ms waiting for shell prompt in pane ${paneId}. ` +
-    `The pane may not have started correctly. Proceeding anyway (fail-open).`
-  );
-  return false;
-}
-
 /**
  * Spawn a CLI agent in a specific pane.
  * Worker startup: env OMC_TEAM_WORKER={teamName}/workerName shell -lc "exec agentCmd"
@@ -604,46 +390,14 @@ export async function waitForShellReady(
 export async function spawnWorkerInPane(
   sessionName: string,
   paneId: string,
-  config: WorkerPaneConfig,
-  opts?: { waitForShell?: boolean; shellReadyOpts?: WaitForShellReadyOptions }
+  config: WorkerPaneConfig
 ): Promise<void> {
   const { execFile } = await import('child_process');
   const { promisify } = await import('util');
   const execFileAsync = promisify(execFile);
 
   validateTeamName(config.teamName);
-
-  // Trust boundary: validate CLI binary path before spawning
-  if (config.launchBinary) {
-    const validation = validateCliBinaryPath(config.launchBinary);
-    if (validation.resolvedPath) {
-      console.info(`[omc-team] CLI binary: ${config.launchBinary} -> ${validation.resolvedPath}`);
-    }
-    for (const warning of validation.warnings) {
-      console.warn(`[omc-team] WARNING: ${warning}`);
-    }
-    if (!validation.isValid) {
-      throw new Error(
-        `CLI binary validation failed for '${config.launchBinary}': ${validation.warnings.join('; ')}. ` +
-        `Set OMC_TEAM_NO_RC=1 to skip shell rc loading or ensure the binary is in a trusted location.`
-      );
-    }
-  }
-
   const startCmd = buildWorkerStartCommand(config);
-
-  // Wait for shell to be ready before sending keys.
-  // Prevents race condition where send-keys fires before zsh is ready (#1144).
-  if (opts?.waitForShell !== false) {
-    const shellReady = await waitForShellReady(paneId, opts?.shellReadyOpts);
-    if (!shellReady) {
-      console.warn(
-        `[tmux-session] spawnWorkerInPane: shell in pane ${paneId} did not become ready within timeout. ` +
-        `Sending command anyway; worker "${config.workerName}" may fail to start. ` +
-        `Increase timeout via OMC_SHELL_READY_TIMEOUT_MS env var or shellReadyOpts.timeoutMs.`
-      );
-    }
-  }
 
   // Use -l (literal) flag to prevent tmux key-name parsing of the command string
   await execFileAsync('tmux', [
@@ -698,37 +452,13 @@ export function paneLooksReady(captured: string): boolean {
   return hasCodexHint;
 }
 
-/**
- * Poll until a pane looks ready (prompt visible) or timeout.
- * Replaces blind setTimeout waits with active readiness confirmation,
- * closing the TOCTOU gap between readiness check and task delivery.
- * Returns true if ready, false on timeout.
- */
-export async function waitForPaneReady(
-  paneId: string,
-  opts?: { timeoutMs?: number; pollIntervalMs?: number }
-): Promise<boolean> {
-  const { timeoutMs = 8000, pollIntervalMs = 500 } = opts ?? {};
-  const deadline = Date.now() + timeoutMs;
-  const { execFile: execFileCb } = await import('child_process');
-  const { promisify } = await import('util');
-  const execFileAsync = promisify(execFileCb);
-
-  while (Date.now() < deadline) {
-    const captured = await capturePaneAsync(paneId, execFileAsync as never);
-    if (paneLooksReady(captured)) return true;
-    await sleep(pollIntervalMs);
-  }
-  return false;
-}
-
 function paneTailContainsLiteralLine(captured: string, text: string): boolean {
   return normalizeTmuxCapture(captured).includes(normalizeTmuxCapture(text));
 }
 
 async function paneInCopyMode(
   paneId: string,
-  _execFileAsync: (cmd: string, args: string[]) => Promise<{ stdout: string }>
+  execFileAsync: (cmd: string, args: string[]) => Promise<{ stdout: string }>
 ): Promise<boolean> {
   try {
     const result = await tmuxAsync(['display-message', '-t', paneId, '-p', '#{pane_in_mode}']);
@@ -796,12 +526,6 @@ export async function sendToWorker(
       await sleep(120);
       await sendKey('C-m');
       await sleep(200);
-    }
-
-    // Re-verify pane state right before text injection (TOCTOU mitigation).
-    // The pane may have entered copy-mode or changed state since the initial check.
-    if (await paneInCopyMode(paneId, execFileAsync as never)) {
-      return false;
     }
 
     // Send text in literal mode with -- separator
@@ -926,7 +650,7 @@ export async function isWorkerAlive(paneId: string): Promise<boolean> {
   try {
     const { execFile } = await import('child_process');
     const { promisify } = await import('util');
-    const _execFileAsync = promisify(execFile);
+    const execFileAsync = promisify(execFile);
     const result = await tmuxAsync([
       'display-message', '-t', paneId, '-p', '#{pane_dead}'
     ]);

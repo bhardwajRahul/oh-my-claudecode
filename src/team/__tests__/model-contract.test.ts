@@ -1,12 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-
-const mocks = vi.hoisted(() => ({
-  resolvedEnv: vi.fn<() => NodeJS.ProcessEnv>(() => ({ PATH: '/mock/path' })),
-}));
-
-vi.mock('../shell-path.js', () => ({
-  resolvedEnv: mocks.resolvedEnv,
-}));
+import { describe, it, expect, vi } from 'vitest';
+import { spawnSync } from 'child_process';
+import { getContract, buildLaunchArgs, buildWorkerArgv, buildWorkerCommand, getWorkerEnv, parseCliOutput, isPromptModeAgent, getPromptModeArgs, isCliAvailable } from '../model-contract.js';
 
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('child_process')>();
@@ -16,16 +10,7 @@ vi.mock('child_process', async (importOriginal) => {
   };
 });
 
-import { spawnSync } from 'child_process';
-import { getContract, buildLaunchArgs, buildWorkerArgv, getWorkerEnv, parseCliOutput, isPromptModeAgent, getPromptModeArgs, isCliAvailable, clearResolvedPathCache } from '../model-contract.js';
-
 describe('model-contract', () => {
-  beforeEach(() => {
-    clearResolvedPathCache();
-    mocks.resolvedEnv.mockReset();
-    mocks.resolvedEnv.mockReturnValue({ PATH: '/mock/path' });
-  });
-
   describe('getContract', () => {
     it('returns contract for claude', () => {
       const c = getContract('claude');
@@ -79,38 +64,14 @@ describe('model-contract', () => {
     it('rejects invalid team names', () => {
       expect(() => getWorkerEnv('Bad-Team', 'worker-1', 'codex')).toThrow('Invalid team name');
     });
-
-    it('includes resolved PATH in worker env for spawn parity with CLI preflight', () => {
-      mocks.resolvedEnv.mockReturnValue({ PATH: '/resolved/path' });
-      const env = getWorkerEnv('my-team', 'worker-1', 'codex');
-      expect(env.PATH).toBe('/resolved/path');
-    });
-
-    it('preserves path key casing when resolved env uses Path', () => {
-      mocks.resolvedEnv.mockReturnValue({ Path: 'C:\\Tools\\bin' } as Record<string, string>);
-      const env = getWorkerEnv('my-team', 'worker-1', 'codex');
-      expect(env.Path).toBe('C:\\Tools\\bin');
-      expect(env.PATH).toBeUndefined();
-    });
   });
 
   describe('buildWorkerArgv', () => {
-    it('resolves binary to absolute path before building argv', () => {
-      const mockSpawnSync = vi.mocked(spawnSync);
-      mockSpawnSync.mockReturnValueOnce({
-        status: 0,
-        stdout: '/usr/local/bin/codex\n',
-        stderr: '',
-        pid: 0,
-        output: [],
-        signal: null,
-      } as any);
-
+    it('builds binary + args', () => {
       expect(buildWorkerArgv('codex', { teamName: 'my-team', workerName: 'worker-1', cwd: '/tmp' })).toEqual([
-        '/usr/local/bin/codex',
+        'codex',
         '--dangerously-bypass-approvals-and-sandbox',
       ]);
-      mockSpawnSync.mockRestore();
     });
   });
 
@@ -128,42 +89,13 @@ describe('model-contract', () => {
   });
 
   describe('isCliAvailable', () => {
-    it('uses resolved absolute path without shell: true', () => {
+    it('passes shell: true to spawnSync so .cmd wrappers are found on Windows', () => {
       const mockSpawnSync = vi.mocked(spawnSync);
-      // First call: which codex -> /usr/local/bin/codex
-      mockSpawnSync.mockReturnValueOnce({
-        status: 0, stdout: '/usr/local/bin/codex\n', stderr: '',
-        pid: 0, output: [], signal: null,
-      } as any);
-      // Second call: /usr/local/bin/codex --version -> success
-      mockSpawnSync.mockReturnValueOnce({
-        status: 0, stdout: 'codex 1.0.0', stderr: '',
-        pid: 0, output: [], signal: null,
-      } as any);
+      mockSpawnSync.mockReturnValue({ status: 0, stdout: '', stderr: '', pid: 0, output: [], signal: null });
 
-      const result = isCliAvailable('codex');
-      expect(result).toBe(true);
+      isCliAvailable('codex');
 
-      // First call resolves binary path via which
-      expect(mockSpawnSync).toHaveBeenCalledWith(
-        'which', ['codex'],
-        expect.objectContaining({ timeout: 5000 }),
-      );
-      // Second call checks version with resolved path (no shell: true)
-      expect(mockSpawnSync).toHaveBeenCalledWith(
-        '/usr/local/bin/codex', ['--version'], { timeout: 5000 },
-      );
-      mockSpawnSync.mockRestore();
-    });
-
-    it('returns false when binary resolves to untrusted path', () => {
-      const mockSpawnSync = vi.mocked(spawnSync);
-      mockSpawnSync.mockReturnValueOnce({
-        status: 0, stdout: '/tmp/evil/codex\n', stderr: '',
-        pid: 0, output: [], signal: null,
-      } as any);
-
-      expect(isCliAvailable('codex')).toBe(false);
+      expect(mockSpawnSync).toHaveBeenCalledWith('codex', ['--version'], { timeout: 5000, shell: true });
       mockSpawnSync.mockRestore();
     });
   });
