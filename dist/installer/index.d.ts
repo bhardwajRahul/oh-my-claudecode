@@ -9,13 +9,13 @@
  */
 /** Claude Code configuration directory */
 export declare const CLAUDE_CONFIG_DIR: string;
-export declare const AGENTS_DIR: string;
-export declare const COMMANDS_DIR: string;
-export declare const SKILLS_DIR: string;
-export declare const HOOKS_DIR: string;
-export declare const HUD_DIR: string;
-export declare const SETTINGS_FILE: string;
-export declare const VERSION_FILE: string;
+export declare const AGENTS_DIR: any;
+export declare const COMMANDS_DIR: any;
+export declare const SKILLS_DIR: any;
+export declare const HOOKS_DIR: any;
+export declare const HUD_DIR: any;
+export declare const SETTINGS_FILE: any;
+export declare const VERSION_FILE: any;
 /**
  * Core commands - DISABLED for v3.0+
  * All commands are now plugin-scoped skills managed by Claude Code.

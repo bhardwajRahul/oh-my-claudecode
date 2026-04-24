@@ -7,10 +7,10 @@
  * Bundled to: dist/hooks/skill-bridge.cjs
  * Usage: const bridge = require('../dist/hooks/skill-bridge.cjs');
  */
-export declare const USER_SKILLS_DIR: string;
-export declare const GLOBAL_SKILLS_DIR: string;
+export declare const USER_SKILLS_DIR: any;
+export declare const GLOBAL_SKILLS_DIR: any;
 export declare const PROJECT_SKILLS_SUBDIR: ".omc/skills";
-export declare const PROJECT_AGENT_SKILLS_SUBDIR: string;
+export declare const PROJECT_AGENT_SKILLS_SUBDIR: any;
 export declare const SKILL_EXTENSION = ".md";
 /**
  * Clear skill metadata cache (for testing).

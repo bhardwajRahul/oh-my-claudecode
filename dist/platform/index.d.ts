@@ -2,7 +2,7 @@
  * Platform Detection and Utilities
  * Central module for all platform-specific code.
  */
-export declare const PLATFORM: NodeJS.Platform;
+export declare const PLATFORM: any;
 export declare function isWindows(): boolean;
 export declare function isMacOS(): boolean;
 export declare function isLinux(): boolean;

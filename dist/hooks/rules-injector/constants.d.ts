@@ -6,8 +6,8 @@
  * Ported from oh-my-opencode's rules-injector hook.
  */
 /** Storage directory for rules injector state */
-export declare const OMC_STORAGE_DIR: string;
-export declare const RULES_INJECTOR_STORAGE: string;
+export declare const OMC_STORAGE_DIR: any;
+export declare const RULES_INJECTOR_STORAGE: any;
 /** Project marker files that indicate a project root */
 export declare const PROJECT_MARKERS: string[];
 /** Subdirectories to search for rules within projects */

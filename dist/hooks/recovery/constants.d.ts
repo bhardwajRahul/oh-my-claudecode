@@ -4,13 +4,13 @@
  * Constants, messages, and patterns for all recovery mechanisms.
  */
 export declare const CLAUDE_CODE_STORAGE: string;
-export declare const MESSAGE_STORAGE: string;
-export declare const PART_STORAGE: string;
+export declare const MESSAGE_STORAGE: any;
+export declare const PART_STORAGE: any;
 /**
  * Debug logging configuration
  */
 export declare const DEBUG: boolean;
-export declare const DEBUG_FILE: string;
+export declare const DEBUG_FILE: any;
 /**
  * Part type sets for categorization
  */

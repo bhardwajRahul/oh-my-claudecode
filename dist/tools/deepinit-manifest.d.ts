@@ -12,7 +12,6 @@
  *
  * @see https://github.com/Yeachan-Heo/oh-my-claudecode/issues/1719
  */
-import { z } from 'zod';
 import type { ToolDefinition } from './types.js';
 /** Sorted file list for a single directory */
 interface DirectoryEntry {
@@ -44,10 +43,10 @@ interface DiffResult {
     };
 }
 declare const deepinitManifestSchema: {
-    action: z.ZodEnum<["diff", "save", "check"]>;
-    workingDirectory: z.ZodOptional<z.ZodString>;
-    mode: z.ZodDefault<z.ZodOptional<z.ZodEnum<["incremental", "full"]>>>;
-    dryRun: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+    action: any;
+    workingDirectory: any;
+    mode: any;
+    dryRun: any;
 };
 /**
  * Returns true if a directory name should be excluded from scanning.

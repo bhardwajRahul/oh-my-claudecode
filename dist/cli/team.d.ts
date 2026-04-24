@@ -50,13 +50,13 @@ export declare function startTeamJob(input: TeamStartInput): Promise<TeamStartRe
 export declare function getTeamJobStatus(jobId: string): Promise<TeamJobStatus>;
 export declare function waitForTeamJob(jobId: string, options?: TeamWaitOptions): Promise<TeamWaitResult>;
 export declare function cleanupTeamJob(jobId: string, graceMs?: number): Promise<TeamCleanupResult>;
-export declare function teamStatusByTeamName(teamName: string, cwd?: string): Promise<Record<string, unknown>>;
-export declare function teamResumeByName(teamName: string, cwd?: string): Promise<Record<string, unknown>>;
+export declare function teamStatusByTeamName(teamName: string, cwd?: any): Promise<Record<string, unknown>>;
+export declare function teamResumeByName(teamName: string, cwd?: any): Promise<Record<string, unknown>>;
 export declare function teamShutdownByName(teamName: string, options?: {
     cwd?: string;
     force?: boolean;
 }): Promise<Record<string, unknown>>;
-export declare function executeTeamApiOperation(operation: string, input: Record<string, unknown>, cwd?: string): Promise<TeamApiEnvelope>;
+export declare function executeTeamApiOperation(operation: string, input: Record<string, unknown>, cwd?: any): Promise<TeamApiEnvelope>;
 export declare function teamStartCommand(input: TeamStartInput, options?: {
     json?: boolean;
 }): Promise<TeamStartResult>;

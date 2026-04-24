@@ -6,8 +6,8 @@
  * Ported from oh-my-opencode's directory-readme-injector hook.
  */
 /** Storage directory for directory-readme-injector state */
-export declare const OMC_STORAGE_DIR: string;
-export declare const README_INJECTOR_STORAGE: string;
+export declare const OMC_STORAGE_DIR: any;
+export declare const README_INJECTOR_STORAGE: any;
 /** README filename to search for */
 export declare const README_FILENAME = "README.md";
 /** AGENTS.md filename to search for (deepinit output) */

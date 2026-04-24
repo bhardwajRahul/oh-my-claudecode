@@ -38,18 +38,8 @@ export declare const sharedMemoryCleanupTool: ToolDefinition<{
     namespace: z.ZodOptional<z.ZodString>;
     workingDirectory: z.ZodOptional<z.ZodString>;
 }>;
-export declare const sharedMemoryTools: (ToolDefinition<{
-    key: z.ZodString;
-    value: z.ZodUnknown;
-    namespace: z.ZodString;
-    ttl: z.ZodOptional<z.ZodNumber>;
-    workingDirectory: z.ZodOptional<z.ZodString>;
-}> | ToolDefinition<{
-    key: z.ZodString;
-    namespace: z.ZodString;
-    workingDirectory: z.ZodOptional<z.ZodString>;
-}> | ToolDefinition<{
+export declare const sharedMemoryTools: ToolDefinition<{
     namespace: z.ZodOptional<z.ZodString>;
     workingDirectory: z.ZodOptional<z.ZodString>;
-}>)[];
+}>[];
 //# sourceMappingURL=shared-memory-tools.d.ts.map

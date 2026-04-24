@@ -44,31 +44,8 @@ export declare const wikiDeleteTool: ToolDefinition<{
     page: z.ZodString;
     workingDirectory: z.ZodOptional<z.ZodString>;
 }>;
-export declare const wikiTools: (ToolDefinition<{
-    title: z.ZodString;
-    content: z.ZodString;
-    tags: z.ZodArray<z.ZodString>;
-    category: z.ZodEnum<typeof WIKI_CATEGORIES>;
-    sources: z.ZodOptional<z.ZodArray<z.ZodString>>;
-    confidence: z.ZodOptional<z.ZodEnum<["high", "medium", "low"]>>;
+export declare const wikiTools: ToolDefinition<{
     workingDirectory: z.ZodOptional<z.ZodString>;
-}> | ToolDefinition<{
-    query: z.ZodString;
-    tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
-    category: z.ZodOptional<z.ZodEnum<typeof WIKI_CATEGORIES>>;
-    limit: z.ZodOptional<z.ZodNumber>;
-    workingDirectory: z.ZodOptional<z.ZodString>;
-}> | ToolDefinition<{
-    workingDirectory: z.ZodOptional<z.ZodString>;
-}> | ToolDefinition<{
-    title: z.ZodString;
-    content: z.ZodString;
-    tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
-    category: z.ZodOptional<z.ZodEnum<typeof WIKI_CATEGORIES>>;
-    workingDirectory: z.ZodOptional<z.ZodString>;
-}> | ToolDefinition<{
-    page: z.ZodString;
-    workingDirectory: z.ZodOptional<z.ZodString>;
-}>)[];
+}>[];
 export {};
 //# sourceMappingURL=wiki-tools.d.ts.map

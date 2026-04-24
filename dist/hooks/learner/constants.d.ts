@@ -2,13 +2,13 @@
  * Learned Skills Constants
  */
 /** User-level skills directory (read by skill-injector.mjs hook) */
-export declare const USER_SKILLS_DIR: string;
+export declare const USER_SKILLS_DIR: any;
 /** Global skills directory (new preferred location: ~/.omc/skills) */
-export declare const GLOBAL_SKILLS_DIR: string;
+export declare const GLOBAL_SKILLS_DIR: any;
 /** Project-level skills subdirectory */
 export declare const PROJECT_SKILLS_SUBDIR: ".omc/skills";
 /** Project-level compatibility skills subdirectory (read-only compatibility source) */
-export declare const PROJECT_AGENT_SKILLS_SUBDIR: string;
+export declare const PROJECT_AGENT_SKILLS_SUBDIR: any;
 /** Maximum recursion depth for skill file discovery */
 export declare const MAX_RECURSION_DEPTH = 10;
 /** Valid skill file extension */

@@ -24,8 +24,8 @@ export declare function syncPluginCache(verbose?: boolean): {
 };
 /** Installation paths (respects CLAUDE_CONFIG_DIR env var) */
 export declare const CLAUDE_CONFIG_DIR: string;
-export declare const VERSION_FILE: string;
-export declare const CONFIG_FILE: string;
+export declare const VERSION_FILE: any;
+export declare const CONFIG_FILE: any;
 /**
  * Stop hook callback configuration for file logging
  */
