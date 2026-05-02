@@ -423,6 +423,37 @@ export interface StartTeamV2Config {
   autoMerge?: boolean;
 }
 
+async function reclaimExpiredInProgressTasks(
+  teamName: string,
+  cwd: string,
+  tasks: TeamTask[],
+): Promise<{ tasks: TeamTask[]; recommendations: string[] }> {
+  const now = Date.now();
+  const recommendations: string[] = [];
+  const updatedTasks: TeamTask[] = [];
+
+  for (const task of tasks) {
+    const leaseUntil = task.claim?.leased_until;
+    if (task.status !== 'in_progress' || !leaseUntil || Number.isNaN(Date.parse(leaseUntil)) || Date.parse(leaseUntil) > now) {
+      updatedTasks.push(task);
+      continue;
+    }
+
+    const reopened: TeamTask = {
+      ...task,
+      status: 'pending',
+      owner: undefined,
+      claim: undefined,
+      version: (task.version ?? 1) + 1,
+    };
+    await writeFile(absPath(cwd, TeamPaths.taskFile(teamName, task.id)), JSON.stringify(reopened, null, 2));
+    recommendations.push(`Reclaimed expired claim for task-${task.id}; returned task to pending`);
+    updatedTasks.push(reopened);
+  }
+
+  return { tasks: updatedTasks, recommendations };
+}
+
 // ---------------------------------------------------------------------------
 // V2 task instruction builder — CLI API lifecycle, NO done.json
 // ---------------------------------------------------------------------------
@@ -1720,7 +1751,9 @@ export async function monitorTeamV2(
 
   // Load all tasks
   const listTasksStartMs = performance.now();
-  const allTasks = await listTasksFromFiles(sanitized, cwd);
+  let allTasks = await listTasksFromFiles(sanitized, cwd);
+  const reclaimResult = await reclaimExpiredInProgressTasks(sanitized, cwd, allTasks);
+  allTasks = reclaimResult.tasks;
   const listTasksMs = performance.now() - listTasksStartMs;
 
   const taskById = new Map(allTasks.map((task) => [task.id, task] as const));
@@ -1736,7 +1769,7 @@ export async function monitorTeamV2(
   const workers: TeamSnapshotV2['workers'] = [];
   const deadWorkers: string[] = [];
   const nonReportingWorkers: string[] = [];
-  const recommendations: string[] = [];
+  const recommendations: string[] = [...reclaimResult.recommendations];
 
   const workerScanStartMs = performance.now();
   const workerSignals = await Promise.all(

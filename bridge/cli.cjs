@@ -33044,6 +33044,29 @@ function getTaskDependencyIds2(task) {
 function getMissingDependencyIds(task, taskById) {
   return getTaskDependencyIds2(task).filter((dependencyId) => !taskById.has(dependencyId));
 }
+async function reclaimExpiredInProgressTasks(teamName, cwd2, tasks) {
+  const now = Date.now();
+  const recommendations = [];
+  const updatedTasks = [];
+  for (const task of tasks) {
+    const leaseUntil = task.claim?.leased_until;
+    if (task.status !== "in_progress" || !leaseUntil || Number.isNaN(Date.parse(leaseUntil)) || Date.parse(leaseUntil) > now) {
+      updatedTasks.push(task);
+      continue;
+    }
+    const reopened = {
+      ...task,
+      status: "pending",
+      owner: void 0,
+      claim: void 0,
+      version: (task.version ?? 1) + 1
+    };
+    await (0, import_promises17.writeFile)(absPath(cwd2, TeamPaths.taskFile(teamName, task.id)), JSON.stringify(reopened, null, 2));
+    recommendations.push(`Reclaimed expired claim for task-${task.id}; returned task to pending`);
+    updatedTasks.push(reopened);
+  }
+  return { tasks: updatedTasks, recommendations };
+}
 function buildV2TaskInstruction(teamName, workerName2, task, taskId, cliOutputContract) {
   const claimTaskCommand = formatOmcCliInvocation(
     `team api claim-task --input '${JSON.stringify({ team_name: teamName, task_id: taskId, worker: workerName2 })}' --json`,
@@ -33976,7 +33999,9 @@ async function monitorTeamV2(teamName, cwd2) {
   }
   const previousSnapshot = await readMonitorSnapshot(sanitized, cwd2);
   const listTasksStartMs = import_perf_hooks2.performance.now();
-  const allTasks = await listTasksFromFiles(sanitized, cwd2);
+  let allTasks = await listTasksFromFiles(sanitized, cwd2);
+  const reclaimResult = await reclaimExpiredInProgressTasks(sanitized, cwd2, allTasks);
+  allTasks = reclaimResult.tasks;
   const listTasksMs = import_perf_hooks2.performance.now() - listTasksStartMs;
   const taskById = new Map(allTasks.map((task) => [task.id, task]));
   const inProgressByOwner = /* @__PURE__ */ new Map();
@@ -33989,7 +34014,7 @@ async function monitorTeamV2(teamName, cwd2) {
   const workers = [];
   const deadWorkers = [];
   const nonReportingWorkers = [];
-  const recommendations = [];
+  const recommendations = [...reclaimResult.recommendations];
   const workerScanStartMs = import_perf_hooks2.performance.now();
   const workerSignals = await Promise.all(
     config2.workers.map(async (worker) => {

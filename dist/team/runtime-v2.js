@@ -220,6 +220,29 @@ function getTaskDependencyIds(task) {
 function getMissingDependencyIds(task, taskById) {
     return getTaskDependencyIds(task).filter((dependencyId) => !taskById.has(dependencyId));
 }
+async function reclaimExpiredInProgressTasks(teamName, cwd, tasks) {
+    const now = Date.now();
+    const recommendations = [];
+    const updatedTasks = [];
+    for (const task of tasks) {
+        const leaseUntil = task.claim?.leased_until;
+        if (task.status !== 'in_progress' || !leaseUntil || Number.isNaN(Date.parse(leaseUntil)) || Date.parse(leaseUntil) > now) {
+            updatedTasks.push(task);
+            continue;
+        }
+        const reopened = {
+            ...task,
+            status: 'pending',
+            owner: undefined,
+            claim: undefined,
+            version: (task.version ?? 1) + 1,
+        };
+        await writeFile(absPath(cwd, TeamPaths.taskFile(teamName, task.id)), JSON.stringify(reopened, null, 2));
+        recommendations.push(`Reclaimed expired claim for task-${task.id}; returned task to pending`);
+        updatedTasks.push(reopened);
+    }
+    return { tasks: updatedTasks, recommendations };
+}
 // ---------------------------------------------------------------------------
 // V2 task instruction builder — CLI API lifecycle, NO done.json
 // ---------------------------------------------------------------------------
@@ -1283,7 +1306,9 @@ export async function monitorTeamV2(teamName, cwd) {
     const previousSnapshot = await readMonitorSnapshot(sanitized, cwd);
     // Load all tasks
     const listTasksStartMs = performance.now();
-    const allTasks = await listTasksFromFiles(sanitized, cwd);
+    let allTasks = await listTasksFromFiles(sanitized, cwd);
+    const reclaimResult = await reclaimExpiredInProgressTasks(sanitized, cwd, allTasks);
+    allTasks = reclaimResult.tasks;
     const listTasksMs = performance.now() - listTasksStartMs;
     const taskById = new Map(allTasks.map((task) => [task.id, task]));
     const inProgressByOwner = new Map();
@@ -1298,7 +1323,7 @@ export async function monitorTeamV2(teamName, cwd) {
     const workers = [];
     const deadWorkers = [];
     const nonReportingWorkers = [];
-    const recommendations = [];
+    const recommendations = [...reclaimResult.recommendations];
     const workerScanStartMs = performance.now();
     const workerSignals = await Promise.all(config.workers.map(async (worker) => {
         const liveness = await getWorkerPaneLiveness(worker.pane_id);
