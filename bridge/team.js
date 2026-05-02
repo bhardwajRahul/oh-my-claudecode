@@ -9461,7 +9461,7 @@ function sanitizeBase(value) {
   return sanitized || "team";
 }
 function normalizeLookupName(value) {
-  const sanitized = sanitizeBase(value);
+  const sanitized = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
   const input = sanitized.slice(0, 30).replace(/-$/, "");
   if (!TEAM_NAME_SAFE_PATTERN.test(input)) {
     throw new Error(`invalid_team_name:${value}`);
