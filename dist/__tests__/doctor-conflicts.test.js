@@ -64,6 +64,8 @@ describe('doctor-conflicts: hook ownership classification', () => {
         mkdirSync(TEST_PROJECT_CLAUDE_DIR, { recursive: true });
         process.env.CLAUDE_CONFIG_DIR = TEST_CLAUDE_DIR;
         process.env.CLAUDE_MCP_CONFIG_PATH = join(TEST_CLAUDE_DIR, '..', '.claude.json');
+        process.env.OMC_HOME = join(TEST_PROJECT_DIR, '.omc-home');
+        process.env.CODEX_HOME = join(TEST_PROJECT_DIR, '.codex');
         cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(TEST_PROJECT_DIR);
     });
     afterEach(() => {
@@ -563,6 +565,7 @@ describe('doctor-conflicts: legacy skills collision check (issue #1101)', () => 
     });
     it('does NOT flag setup-installed omc-reference fallback when it matches the bundled skill (issue #2992)', () => {
         const canonicalContent = writeCanonicalOmcReferenceSkill();
+        process.env.OMC_MCP_REGISTRY_PATH = join(TEST_PROJECT_DIR, 'no-mcp-registry.json');
         const skillsDir = join(TEST_CLAUDE_DIR, 'skills');
         mkdirSync(join(skillsDir, 'omc-reference'), { recursive: true });
         writeFileSync(join(skillsDir, 'omc-reference', 'SKILL.md'), canonicalContent);
